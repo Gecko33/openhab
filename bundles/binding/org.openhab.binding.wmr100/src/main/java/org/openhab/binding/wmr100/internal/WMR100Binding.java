@@ -15,13 +15,11 @@ import java.util.Set;
 
 import org.apache.commons.lang.StringUtils;
 import org.openhab.binding.wmr100.WMR100BindingProvider;
-import org.openhab.binding.wmr100.utils.WMRDecoder;
 import org.openhab.binding.wmr100.utils.WxLogger;
 import org.openhab.core.binding.AbstractActiveBinding;
 import org.openhab.core.library.types.DecimalType;
 import org.openhab.core.types.Command;
 import org.openhab.core.types.State;
-import org.openhab.core.types.Type;
 import org.osgi.service.cm.ConfigurationException;
 import org.osgi.service.cm.ManagedService;
 import org.slf4j.Logger;
@@ -53,11 +51,25 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 	 */
 	private long refreshInterval = 10;
 	
-	/** Weather station USB vendor identifier */
-	private static final int STATION_VENDOR = 0x0FDE;
+	private int vendorId;
+	
+	private int productId;
+	
+	private int retryCounter;
+	
+	private int retryDelay = DEFAULT_RETRY_DELAY;
+	
+	private int retryCount = DEFAULT_RETRY_COUNT;
+	
+	/** Weather station USB default vendor identifier */
+	private static final int DEFAULT_STATION_VENDOR = 0x0FDE;
 
-	/** Weather station USB product identifier */
-	private static final int STATION_PRODUCT = 0xCA01;
+	/** Weather station USB default product identifier */
+	private static final int DEFAULT_STATION_PRODUCT = 0xCA01;
+	
+	private static final int DEFAULT_RETRY_DELAY = 1000;
+	
+	private static final int DEFAULT_RETRY_COUNT = 120;
 	
 	/** HID Device, aka. WMR100 handler */
 	protected HIDDevice hidDevice;
@@ -75,14 +87,29 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 			logger.error("Could not get HIDManager instance", e);
 			return;
 		}
-		try {
-			hidDevice = hidManager.openById(STATION_VENDOR, STATION_PRODUCT, null);
-			logger.info("HID Device found:" + hidDevice.getManufacturerString());
-			WxLogger.setDevice(hidDevice);
-			
-		} catch (IOException e) {
-			logger.error("Could not open HIDDevice.");
-			return;
+		while (hidDevice == null) {
+			try {
+				hidDevice = hidManager.openById(DEFAULT_STATION_VENDOR, DEFAULT_STATION_PRODUCT, null);
+				if (hidDevice != null) {
+					logger.info("HID Device found:" + hidDevice.getManufacturerString());
+					WxLogger.setDevice(hidDevice);
+					retryCounter = 0;
+					return; // we're finished with startup!
+				} else {
+					logger.error("No HID Device found!!");
+				}
+				
+			} catch (IOException e) {
+				logger.error("Could not open HIDDevice.");
+				return;
+			}
+			// pause for <retryDelay> milliseconds.
+			try {
+				Thread.sleep(retryDelay);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+			retryCounter++;
 		}
 		
 	}
@@ -125,6 +152,10 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 	protected void execute() {
 		if (running) return;
 		try {
+			if (hidDevice == null) {
+				logger.warn("HID Device not yet open.");
+				return;
+			}
 			running = true;
 			WxLogger.addDataListener(this);
 			WxLogger.initialise();
@@ -182,7 +213,6 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 		return null;
 	}
 	
-	@Override
 	public void processData(Map<String, Object> data) {
 		Set<String> keys = data.keySet();
 		logger.debug(keys.size() + " data entries extracted from frame");
@@ -224,7 +254,6 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 	/**
 	 * @{inheritDoc}
 	 */
-	@Override
 	public void updated(Dictionary<String, ?> config) throws ConfigurationException {
 		if (config != null) {
 			
@@ -234,6 +263,28 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 			if (StringUtils.isNotBlank(refreshIntervalString)) {
 				refreshInterval = Long.parseLong(refreshIntervalString);
 			}
+			String strVendorId = (String) config.get("vendor");
+			if (StringUtils.isNotBlank(strVendorId)) {
+				logger.info("Vendor ID: " + strVendorId);
+				try {
+					vendorId = Integer.parseInt(strVendorId.replace("0x",""), 16);
+				} catch(Exception e) {
+					logger.error("Could not parse properly vendor Id: " + strVendorId);
+					return;
+				}
+			}
+			
+			String strProductId = (String) config.get("product");
+			if (StringUtils.isNotBlank(strProductId)) {
+				logger.info("Product ID: " + strProductId);
+				try {
+					productId = Integer.parseInt(strProductId.replace("0x", ""), 16);
+				} catch(Exception e) {
+					logger.error("Could not parse properly product Id: " + strProductId);
+					return;
+				}
+			}
+			
 			
 			// read further config parameters here ...
 			setProperlyConfigured(true);
