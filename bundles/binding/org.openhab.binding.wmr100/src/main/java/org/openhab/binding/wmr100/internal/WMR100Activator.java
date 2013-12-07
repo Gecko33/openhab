@@ -32,7 +32,22 @@ public final class WMR100Activator implements BundleActivator {
 	public void start(BundleContext bc) throws Exception {
 		context = bc;
 		logger.debug("WMR100 binding has been started.");
-		System.loadLibrary("hidapi-jni-64");
+		// use system properties: osgi.os and osg.arch
+		String osgiArch = System.getProperty("osgi.arch");
+		String osgiOs = System.getProperty("osgi.os");
+		String libName = null;
+		if ("arm".equalsIgnoreCase(osgiArch)) {
+			// then we probably are running on Raspberry Pi!
+			libName = "hidapi-jni-arm";
+		} else if ("x86".equals(osgiArch)) {
+			// 32bits architecture
+			libName = "hidapi-jni-32";
+		} else {
+			// 64bits architecture
+			libName = "hidapi-jni-64";
+		}
+		System.loadLibrary(libName);
+		logger.debug("HID Library loaded.");
 	}
 
 	/**

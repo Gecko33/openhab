@@ -29,4 +29,11 @@ Bundle-RequiredExecutionEnvironment: J2SE-1.5
 Service-Component: OSGI-INF/binding.xml, OSGI-INF/genericbindingprovider.xml
 Bundle-ClassPath: .,
  lib/javahid-1.1.jar
-Bundle-NativeCode: /res/win/hidapi-jni-64.dll
+Bundle-NativeCode: /res/win/hidapi-jni-64.dll;osname=Win32;processor=x86-64,
+ /res/win/hidapi-jni-32.dll;osname=Win32;processor=x86,
+ /res/linux/libhidapi-jni-64.so;osname=Linux;processor=x86-64,
+ /res/linux/libhidapi-jni-32.so;osname=Linux;processor=x86,
+ /res/linux/libhidapi-jni-arm.so;osname=Linux;processor=arm,
+ /res/mac/libhidapi-jni-64.jnilib;osname=MacOSX;processor=x86-64,
+ /res/mac/libhidapi-jni-32.jnilib;osname=MacOSX;processor=x86
+Bundle-ActivationPolicy: lazy
