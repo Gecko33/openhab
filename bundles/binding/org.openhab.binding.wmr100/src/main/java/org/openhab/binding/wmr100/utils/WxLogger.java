@@ -1,20 +1,16 @@
 package org.openhab.binding.wmr100.utils;
 
 import com.codeminders.hidapi.HIDDevice; // use HID devices
-import com.codeminders.hidapi.HIDDeviceInfo; // use HID device info
 import com.codeminders.hidapi.HIDManager; // use HID manager
 
-import java.io.BufferedReader; // use buffered readers
 import java.io.BufferedWriter; // use buffered writers
 import java.io.File; // use files
-import java.io.FileReader; // use file readers
 import java.io.FileWriter; // use file writers
 import java.io.IOException; // use I/O exceptions
 import java.text.SimpleDateFormat; // use simple dates
 import java.util.ArrayList;
 import java.util.Arrays; // use arrays
 import java.util.Calendar; // use calendars
-import java.util.Date; // use dates
 import java.util.HashMap; // use hashmaps
 import java.util.List;
 import java.util.Map;
@@ -25,165 +21,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * <p>
- * This program logs data to file from an Oregon Scientific WMR180 Professional
- * Weather Station. This is a simple logging program without any graphing or
- * upload capabilities. The log format is compatible with other software created
- * by the author. For built-in graphs or weather site upload, look at
- * alternatives such as:
- * </p>
+ * <p>This class is derived from the excellent work made by 
+ * Kenneth J. Turner (http://www.cs.stir.ac.uk/~kjt).</p>
  * 
- * <ul>
+ * <p>This code results from some refactoring and adaptation to 
+ * the needs of the WMR100 Binding.</p>
  * 
- * <li>
- * <a href="http://sandaysoft.com/" target="_blank">Cumulus</a></li>
- * 
- * <li>
- * <a href="http://wmrx00.sourceforge.net/" target="_blank">Weather Station Data
- * Logger</a></li>
- * 
- * <li>
- * <a href="http://code.google.com/p/wfrog/" target="_blank">wfrog</a></li>
- * 
- * <li>
- * <a href="http://www.wviewweather.com/" target="_blank">wview</a></li>
- * 
- * </ul>
- * 
- * <p>
- * When the program runs interactively, entering '0' to '4' will change the
- * logging level from nothing to everything. Entering '.' twice in succession
- * will exit the program. Note that a keyboard entry must be followed by Enter
- * before it is processed. Keyboard entry is checked only every 10 to 20 seconds
- * approximately (depending on the length of the main loop).
- * </p>
- * 
- * <p>
- * In the code, entries are in alphabetical order by category. The code is
- * open-source under the GNU General Public License version 2 or (at your
- * discretion) any later version. The code embodies information made public in a
- * number of sources that include:
- * </p>
- * 
- * <ul>
- * 
- * <li>
- * <a href=
- * "http://wiki.sandaysoft.com/files/memorymaps/Decode_WMR100-200_v5.xlsm"
- * target="_blank">WMR100 and WMR200 Protocol Decoder</a></li>
- * 
- * <li>
- * <a href="http://www.dg1sfj.de/hardware/hw_wmr100_protokoll.html"
- * target="_blank">WMR100 Protocol</a></li>
- * 
- * </ul>
- * 
- * <p>
- * A file for each day is created in the current directory with the name
- * 'YYYYMMDD.DAT' (e.g. '20130131.DAT'). It contains the following fields
- * separated by one or more spaces. Values are calculated for each logging
- * interval, except rainfall which is totalled since the previous midnight.
- * </p>
- * 
- * <pre>
- *     HH:MM:SS               time of log
- *     NN.N NN.N NN.N         wind speed average/minimum/maximum (m/s)
- *     NNN NNN NNN            wind direction average/minimum/maximum (deg from N)
- *     NN.N NN.N NN.N         outdoor temperature average/minimum/maximum (C)
- *     NN NN NN               outdoor humidity average/minimum/maximum (%)
- *     NN.N NN.N NN.N         outdoor dewpoint average/minimum/maximum (C)
- *     NNNN.N NNNN.N NNNN.N   indoor pressure average/minimum/maximum (mb)
- *     NN.N NN.N NN.N         indoor temperature average/minimum/maximum (C)
- *     NN NN NN               indoor humidity average/minimum/maximum (%)
- *     NN                     rainfall total since midnight (mm)
- *     NN.N NN.N NN.N         wind chill temperature average/minimum/maximum (C)
- *     NN.N NN.N NN.N         indoor dewpoint average/minimum/maximum (C)
- *     NN NN NN               UV index average/minimum/maximum (0 low, 6 high, ...)
- * </pre>
- * 
- * <p>
- * This format is compatible with that used by the original WeatherView software
- * supplied by Oregon Scientific, except that measurements finish with an indoor
- * dewpoint and a UV index. Another difference is that rainfall is cumulative
- * for each day since midnight. The log format could be customised by changing
- * method <var>logMeasures</var>.
- * </p>
- * 
- * <p>
- * The wind chill is normally calculated when an anemometer reading is received.
- * If an outdoor temperature has been received and the wind speed is high
- * enough, the wind chill is calculated from the North American/UK formula. If
- * an outdoor temperature has been received but the wind speed is not high
- * enough, the wind chill is set to the outdoor temperature. If an outdoor
- * temperature has not been received and the weather station wind chill is
- * invalid, the wind chill is set to zero (which may result in the first such
- * value being incorrect).
- * </p>
- * 
- * <p>
- * Likely program customisations involve changing the following constants in the
- * customisation section:
- * </p>
- * 
- * <dl>
- * 
- * <dt>ARCHIVE_PATH</dt>
- * <dd>
- * directory path for archive files (default '/tmp', must not be '.', or end
- * with '/' or '\'); if empty, no archiving takes place (i.e. log files remain
- * in their original place)</dd>
- * 
- * <dt>BACKUP_LOG</dt>
- * <dd>
- * when archiving, preserve the current day's log as "LAST_DAY.DAT" (default
- * true, i.e. do backup); the last day's log file will be replaced if it exists</dd>
- * 
- * <dt>DEGREE</dt>
- * <dd>
- * degree symbol (default Unicode degree); this may need to be set to empty if
- * the console does not support Unicode</dd>
- * 
- * <dt>LOG_DEFAULT</dt>
- * <dd>
- * default flags for log output as logical OR of individual log flags (default
- * hourly data, for 0 nothing, 1 USB data, 2 frame data, 4 sensor data, 8 hourly
- * data)</dd>
- * 
- * <dt>LOG_FILE</dt>
- * <dd>
- * name of a log file to use, or empty to mean output to the console (default
- * empty)</dd>
- * 
- * <dt>LOG_INTERVAL</dt>
- * <dd>
- * the number of minutes between log entries (default 15, i.e. 00/15/30/45
- * minutes past the hour); the value must be a submultiple of 60 (e.g. 10, 15,
- * 20, 30)</dd>
- * 
- * <dt>OUTDOOR_SENSOR</dt>
- * <dd>
- * outdoor temperature sensor to log (default 1)</dd>
- * 
- * </dl>
- * 
- * <p>
- * Error messages and the following hourly summaries can appear in the log
- * output. Hourly figures are averages for the past hour, except for rainfall
- * which is cumulative. Indoor or outdoor sensor data is followed by '?' if
- * there is missing data for the corresponding sensor. Outdoor sensor data is
- * followed by '!' if the corresponding sensor battery is low.
- * </p>
- * 
- * <pre>
- *     HH:MM  time
- *     NN.N   wind speed
- *     NNN    wind direction
- *     NN.N   outdoor temperature
- *     NN     outdoor humidity
- *     NNNN   outdoor pressure
- *     NN.N   outdoor rainfall total since midnight
- *     NN     outdoor UV index
- * </pre>
+ * <p>Any information about the original code is available here: 
+ * http://www.cs.stir.ac.uk/~kjt/software/comms/wxlogger.html</p>
  * 
  * @author Kenneth J. Turner (http://www.cs.stir.ac.uk/~kjt)
  * @version 1.0 (18th February 2013)
@@ -212,8 +57,7 @@ public class WxLogger {
 			"WNW", "NW", "NNW" };
 
 	/** Format for log dates */
-	private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat(
-			"HH:mm:ss dd/MM/yy");
+	private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("HH:mm:ss dd/MM/yy");
 
 	/** Dummy value for initialisation */
 	private static final float DUMMY_VALUE = -999.0f;
@@ -222,7 +66,6 @@ public class WxLogger {
 	private static final int FRAME_BYTE = (byte) 0xFF;
 
 	/** Human Interface Device native library name */
-//	private static final String HID_LIBRARY = "hidapi";
 	private static final String HID_LIBRARY = "hidapi-jni-64";
 
 	/** File name for last day's data */
@@ -403,7 +246,6 @@ public class WxLogger {
 
 	/** Logical OR of individual flags */
 	private static int logFlags = LOG_SENSOR;
-//	private static int logFlags = LOG_NONE;
 //	private static int logFlags = LOG_FRAME | LOG_HOUR | LOG_SENSOR | LOG_USB;
 
 	/** Number of consecutive full stop characters from console */
