@@ -239,6 +239,9 @@ public class WxLogger {
 
 	/** Console log output has raw USB data as received */
 	private static final int LOG_USB = (byte) 0x01;
+	
+	/** Do not log anything */
+	private static final int LOG_NONE = (byte) 0x00;
 
 	/** Radio description (indexed by radio code) */
 	private static final String[] RADIO_DESCRIPTION = { "None",
@@ -277,9 +280,6 @@ public class WxLogger {
 
 	/** Default log flags (logical OR of individual log flags) */
 	private static final int LOG_DEFAULT = LOG_HOUR;
-
-	/** Log destination (non-empty means a file, empty means the console) */
-	private static final String LOG_FILE = "";
 
 	/** Logging interval (minutes, must be sub-multiple of 60) */
 //	private static final int LOG_INTERVAL = 15;
@@ -402,8 +402,9 @@ public class WxLogger {
 	// ----------------------------
 
 	/** Logical OR of individual flags */
-//	private static int logFlags = LOG_DEFAULT;
-	private static int logFlags = LOG_FRAME | LOG_HOUR | LOG_SENSOR | LOG_USB;
+	private static int logFlags = LOG_SENSOR;
+//	private static int logFlags = LOG_NONE;
+//	private static int logFlags = LOG_FRAME | LOG_HOUR | LOG_SENSOR | LOG_USB;
 
 	/** Number of consecutive full stop characters from console */
 	private static int stopCount;
@@ -504,41 +505,6 @@ public class WxLogger {
 	// ******************************* Main Program
 	// ******************************
 
-	/**
-	 * Main program to open the weather station device, repeatedly read from it,
-	 * and log data as required.
-	 * 
-	 * @param arguments
-	 *            command-line arguments (unusued)
-	 */
-	public static void main(String[] arguments) {
-		initialise(); // initialise program variables
-		try { // try to read station data
-			if (LOG_INTERVAL < 0 || // log interval invalid?
-					LOG_INTERVAL > 60 || 60 % LOG_INTERVAL != 0)
-				throw (new Exception( // report error
-						"LOG_INTERVAL " + LOG_INTERVAL
-								+ " not submultiple of 60"));
-			if (ARCHIVE_PATH.equals("")
-					|| // log path invalid?
-					ARCHIVE_PATH.equals(".") || ARCHIVE_PATH.endsWith("/")
-					|| ARCHIVE_PATH.endsWith("\\"))
-				throw (new Exception( // report error
-						"ARCHIVE_PATH must not be empty, '.', or end '/' or '\\'"));
-			loadLibrary(); // load HID native library
-			hidManager = HIDManager.getInstance(); // get HID manager instance
-			hidDevice = stationOpen(); // open station as HID device
-			if (hidDevice != null) // device found?
-				stationRead(); // repeatedly read station data
-			else
-				// device not found
-				throw (new Exception( // report error
-						"could not open weather station device"));
-		} catch (Throwable throwable) { // catch any error
-			logError("Program error: " + throwable);// report program error
-			throwable.printStackTrace(); // report stack trace
-		}
-	}
 
 	// ********************************* Methods
 	// *********************************
@@ -994,45 +960,6 @@ public class WxLogger {
 	}
 
 	/**
-	 * Archive data if required.
-	 * 
-	 * @throws input
-	 *             -output exception
-	 */
-	private static void archiveData() throws IOException {
-		if (clockHour == 0 && !ARCHIVE_PATH.equals("")) { // midnight and
-															// archiving?
-			File logFile = new File( // set log file
-					String.format("%04d%02d%02d.DAT", clockYear, clockMonth,
-							clockDay));
-			File archiveFile = new File( // set archive file
-					ARCHIVE_PATH + '/' + logFile);
-			BufferedReader logReader = // open log file for reading
-			new BufferedReader(new FileReader(logFile));
-			BufferedWriter archiveWriter = // open archive file for writing
-			new BufferedWriter(new FileWriter(archiveFile));
-			String logLine; // log line
-			while ((logLine = logReader.readLine()) // read log lines
-			!= null) {
-				archiveWriter.write(logLine); // output log line to archive
-				archiveWriter.newLine(); // append newline to archive
-			}
-			logReader.close(); // close log file
-			archiveWriter.close(); // close archive file
-			File lastFile = new File(LAST_DAY); // set last day file
-			if (BACKUP_LOG) { // backup current day?
-				if (lastFile.exists() && // last day file exists and ...
-						!lastFile.delete()) // last day file not deleted?
-					logError("Could not delete " + lastFile); // report error
-				if (!logFile.renameTo(lastFile)) // current not renamed as last?
-					logError("Could not rename " + logFile); // report error
-			} else // do not backup current day
-			if (!logFile.delete()) // current day file not deleted?
-				logError("Could not delete " + logFile); // report error
-		}
-	}
-
-	/**
 	 * Check console for input.
 	 * 
 	 * @throws input
@@ -1269,11 +1196,6 @@ public class WxLogger {
 	 * Initialise program variables.
 	 */
 	public static void initialise() {
-		if (LOG_FILE.equals("")) { // console output?
-			logInfo("Use '.' twice to quit or " + // output instructions
-					"'0' to '4' for report level (then Enter)");
-			logInfo("Now reporting hourly data"); // report logging level
-		}
 		stopCount = 0; // set no full stops yet
 
 		Calendar now = Calendar.getInstance(); // get current date and time
@@ -1359,13 +1281,6 @@ public class WxLogger {
 	}
 
 	/**
-	 * Load native library for accessing Human Interface Devices.
-	 */
-	private static void loadLibrary() throws Throwable {
-		System.loadLibrary(HID_LIBRARY); // load HID library
-	}
-
-	/**
 	 * Log buffer data.
 	 * 
 	 * @param prefix
@@ -1407,7 +1322,6 @@ public class WxLogger {
 		logMeasures(); // log measures to file
 		clockMinute = 0; // set clock minute
 		clockHour = newHour; // set clock hour
-		archiveData(); // archive data if required
 		reportMeasures(); // report measures to log
 		Calendar now = Calendar.getInstance(); // get current date and time
 		clockDay = now.get(Calendar.DAY_OF_MONTH); // get current day
@@ -1478,28 +1392,11 @@ public class WxLogger {
 	 *            error message
 	 */
 	private static void logMessage(boolean error, String message) {
-		try { // try to output message
-//			if (logFlags != 0 && logFlags != LOG_HOUR)// not just hourly data?
-//				message = // timestamp message
-//				"[" + (error ? "ERR " : "INF ")
-//						+ DATE_FORMAT.format(new Date()) + "] " + message;
-			if (LOG_FILE.equals("")) { // console output?
-				if (error) // error message?
-					logger.error(message); // output console error message
-				else
-					// information message
-					logger.debug(message); // output console normal
-													// message
-			} else { // log file output
-				BufferedWriter logWriter = // open log file for append
-				new BufferedWriter(new FileWriter(LOG_FILE, true));
-				logWriter.write(message); // output message
-				logWriter.newLine(); // append newline
-				logWriter.close(); // close log file
-			}
-		} catch (IOException exception) { // catch error
-			logger.error( // output console error
-					"could not log message: " + exception);
+		if (error) {// error message?
+			logger.error(message);
+		} else {
+			// information message
+			logger.debug(message);
 		}
 	}
 
@@ -1627,29 +1524,6 @@ public class WxLogger {
 	}
 
 	/**
-	 * Close USB connection to weather station.
-	 * 
-	 * @throws input
-	 *             -output exception
-	 */
-	private static void stationClose() throws IOException {
-		if (hidDevice != null) // HID device defined?
-			hidDevice.close(); // close HID device
-	}
-
-	/**
-	 * Open USB connection to weather station.
-	 * 
-	 * @return handle on weather station device
-	 * @throws input
-	 *             -output exception
-	 */
-	private static HIDDevice stationOpen() throws IOException {
-		return ( // open and return HID device
-		hidManager.openById(STATION_VENDOR, STATION_PRODUCT, null));
-	}
-
-	/**
 	 * Repeatedly request data from the weather station, analysing the
 	 * responses. Periodically repeat the data request.
 	 * 
@@ -1720,28 +1594,51 @@ public class WxLogger {
 		return (valid); // return validity check
 	}
 	
+	/**
+	 * Associate a HID Device to the logger.
+	 * @param device
+	 */
 	public static void setDevice(HIDDevice device) {
 		WxLogger.hidDevice = device;
 	}
 	
+	/**
+	 * Interface defining a listener for weather data.
+	 * @author Jerome
+	 *
+	 */
 	public static interface DataListener {
 		void processData(Map<String, Object> data);
 	}
 	
 	protected static List<DataListener> listeners = new ArrayList<DataListener>();
 	
+	/**
+	 * Add a listener to the listeners pool. 
+	 * @param l {@link DataListener}
+	 */
 	public static void addDataListener(DataListener l) {
 		listeners.add(l);
 	}
 	
+	/**
+	 * Remove a listener from the listeners pool.
+	 * @param l {@link DataListener}
+	 */
 	public static void removeListener(DataListener l) {
 		listeners.remove(l);
 	}
 	
+	/**
+	 * Remove all listeners from the listeners pool at once.
+	 */
 	public static void clearListeners() {
 		listeners.clear();
 	}
 	
+	/**
+	 * Push data towards registered listeners.
+	 */
 	protected static void pushData() {
 		for (DataListener l : listeners) {
 			l.processData(WxLogger.DATA);
