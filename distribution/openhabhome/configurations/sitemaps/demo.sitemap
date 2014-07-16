@@ -1,6 +1,7 @@
 sitemap demo label="Main Menu"
 {
 	Frame {
+		Group item=gTest label="WMR100 Data"
 		Group item=gFF label="First Floor" icon="firstfloor"
 		Group item=gGF label="Ground Floor" icon="groundfloor"
 		Group item=gC label="Cellar" icon="cellar"	

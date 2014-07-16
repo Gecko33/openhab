@@ -6,6 +6,7 @@ Group Outdoor 	(All)
 Group Shutters 	(All)
 Group Weather 	(All)
 Group Status 	(All)
+Group gTest		(All)
 
 Group GF_Living 	"Living Room" 	<video> 	(gGF)
 Group GF_Kitchen 	"Kitchen" 		<kitchen> 	(gGF)
@@ -118,3 +119,14 @@ Number Temperature_Setpoint		"Temperature [%.1f °C]" <temperature>
 
 String UnknownDevices    "Unknown Devices in Range: [%s]" { bluetooth="?" }
 Number NoOfPairedDevices "Paired Devices in Range: [%d]"  { bluetooth="!" }
+
+/* Dev WMR100 */
+Number pressureAbsolute "pression [%d mb]"				(gTest) { wmr100="pressureAbsolute:0" }
+Number windGust 		"Vent : Vitesse [%d m/s]"  		(gTest) { wmr100="windGust:1" }
+Number windDirection 	"Vent : Direction [%d°]" 		(gTest) { wmr100="windDirection:1" }
+Number stationTemp		"Temp. Station : [%.1f°C]"		(gTest) { wmr100="temperature:0" }
+Number sensor1Temp		"Temp. Sonde 1 : [%.1f°C]"		(gTest) { wmr100="temperature:1" }
+Number sensor2Temp2		"Temp. Sonde 2 : [%.1f°C]"		(gTest) { wmr100="temperature:2" }
+Number sensor3Temp3		"Temp. Sonde 3 : [%.1f°C]"		(gTest) { wmr100="temperature:3" }
+Number sensor4Temp1		"Temp. Sonde 4 : [%.1f°C]"		(gTest) { wmr100="temperature:4" }
+Number sensor5Temp1		"Temp. Sonde 5 : [%.1f°C]"		(gTest) { wmr100="temperature:5" }
