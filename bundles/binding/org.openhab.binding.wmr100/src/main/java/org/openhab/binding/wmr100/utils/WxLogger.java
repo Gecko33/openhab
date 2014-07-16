@@ -1,3 +1,11 @@
+/**
+ * Copyright (c) 2010-2013, openHAB.org and others.
+ *
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ */
 package org.openhab.binding.wmr100.utils;
 
 import com.codeminders.hidapi.HIDDevice; // use HID devices
@@ -442,11 +450,12 @@ public class WxLogger {
 		addMeasure(INDEX_WIND_SPEED, windAverage); // add wind speed measurement
 		addMeasure(INDEX_WIND_CHILL, windChill); // add wind chill measurement
 		
-		// JCO
-		DATA.put("windDirection", windDirection);
-		DATA.put("windGust", windGust);
-		DATA.put("windAverage", windAverage);
-		DATA.put("windChill", windChill);
+		// JCO: we'll consider sensor is 0, since no sensor ID is sent in this frame.
+		// Nevertheless, only one wind sensor seems to be connectable.
+		DATA.put("windDirection:0", windDirection);
+		DATA.put("windGust:0", windGust);
+		DATA.put("windAverage:0", windAverage);
+		DATA.put("windChill:0", windChill);
 	}
 
 	/**
@@ -474,10 +483,10 @@ public class WxLogger {
 				pressureAbsolute);
 		
 		// JCO - always Sensor 0 for those data.
-		DATA.put("pressureAbsolute", pressureAbsolute); // in mb
-		DATA.put("pressureRelative", pressureRelative); // in mb
-		DATA.put("weatherForecast", weatherForecast); // text
-		DATA.put("weatherPrevious", weatherPrevious); // text
+		DATA.put("pressureAbsolute:0", pressureAbsolute); // in mb
+		DATA.put("pressureRelative:0", pressureRelative); // in mb
+		DATA.put("weatherForecast:0", weatherForecast); // text
+		DATA.put("weatherPrevious:0", weatherPrevious); // text
 	}
 
 	/**
