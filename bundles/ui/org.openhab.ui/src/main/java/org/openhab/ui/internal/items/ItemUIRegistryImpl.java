@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2010-2013, openHAB.org and others.
+ * Copyright (c) 2010-2014, openHAB.org and others.
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -35,11 +35,7 @@ import org.openhab.core.library.items.StringItem;
 import org.openhab.core.library.items.SwitchItem;
 import org.openhab.core.library.types.DateTimeType;
 import org.openhab.core.library.types.DecimalType;
-import org.openhab.core.library.types.OnOffType;
-import org.openhab.core.library.types.OpenClosedType;
 import org.openhab.core.library.types.PercentType;
-import org.openhab.core.library.types.StringType;
-import org.openhab.core.library.types.UpDownType;
 import org.openhab.core.transform.TransformationException;
 import org.openhab.core.transform.TransformationHelper;
 import org.openhab.core.transform.TransformationService;
@@ -85,8 +81,8 @@ public class ItemUIRegistryImpl implements ItemUIRegistry {
 	/* RegEx to extract and parse a function String <code>'\[(.*?)\((.*)\):(.*)\]'</code> */
 	protected static final Pattern EXTRACT_TRANSFORMFUNCTION_PATTERN = Pattern.compile("\\[(.*?)\\((.*)\\):(.*)\\]");
 	
-	/* RegEx to identify format patterns */
-	protected static final String IDENTIFY_FORMAT_PATTERN_PATTERN = "%(\\d\\$)?(<)?(\\.\\d)?[a-zA-Z]{1,2}";
+	/* RegEx to identify format patterns. See java.util.Formatter#formatSpecifier (without the '%' at the very end). */
+	protected static final String IDENTIFY_FORMAT_PATTERN_PATTERN = "%(\\d+\\$)?([-#+ 0,(\\<]*)?(\\d+)?(\\.\\d+)?([tT])?([a-zA-Z])";
 
 	protected Set<ItemUIProvider> itemUIProviders = new HashSet<ItemUIProvider>();
 
@@ -253,11 +249,15 @@ public class ItemUIRegistryImpl implements ItemUIRegistry {
 				// The following exception handling has been added to work around a Java bug with formatting
 				// numbers. See http://bugs.sun.com/view_bug.do?bug_id=6476425
 				// Without this catch, the whole sitemap, or page can not be displayed!
+				// This also handles IllegalFormatConverionException, which is a subclass of IllegalArgument.
 				try {
-				formatPattern = ((Type) state).format(formatPattern);
-			}
+					formatPattern = ((Type) state).format(formatPattern);
+				}
 				catch(IllegalArgumentException e) {
-					formatPattern = new String("Err"); 
+					logger.warn(
+							"Exception while formatting value '{}' of item {} with format '{}': {}",
+							state, itemName, formatPattern, e);
+					formatPattern = new String("Err");
 				}
 			}
 
@@ -298,8 +298,14 @@ public class ItemUIRegistryImpl implements ItemUIRegistry {
 	protected String formatUndefined(String formatPattern) {
 		String undefinedFormatPattern = 
 			formatPattern.replaceAll(IDENTIFY_FORMAT_PATTERN_PATTERN, "%1\\$s");
-		String formattedValue = String.format(undefinedFormatPattern, "-");
-		return formattedValue;
+		try {
+			return String.format(undefinedFormatPattern, "-");
+		} catch (Exception e) {
+			logger.warn(
+					"Exception while formatting undefined value [sourcePattern={}, targetPattern={}, {}]",
+					formatPattern, undefinedFormatPattern, e);
+			return "Err";
+		}
 	}
 	
 	/*
@@ -786,6 +792,11 @@ public class ItemUIRegistryImpl implements ItemUIRegistry {
 
 		if(colorString.startsWith("\"") && colorString.endsWith("\""))
 			colorString = colorString.substring(1, colorString.length()-1);
+		
+		// Check if the color is a "standard" color - if so, we convert to the CSS ("#xxxxxx") format
+		OpenhabColors stdColor = OpenhabColors.fromString(colorString);
+		if(stdColor != null)
+			colorString = stdColor.toString();
 
 		return colorString;
 	}
@@ -876,6 +887,34 @@ public class ItemUIRegistryImpl implements ItemUIRegistry {
 			    }
 			    return null;
 			  }
+
+		public String toString() {
+			return this.value;
+		}
+	}
+
+	enum OpenhabColors {
+		MAROON("#800000"),RED("#ff0000"),ORANGE("#ffa500"),YELLOW("#ffff00"),OLIVE("#808000"),
+		PURPLE("#800080"),FUCHSIA("#ff00ff"),WHITE("#ffffff"),LIME("#00ff00"),GREEN("#008000"),
+		NAVY("#000080"),BLUE("#0000ff"),AQUA("#00ffff"),TEAL("#008080"),BLACK("#000000"),
+		SILVER("#c0c0c0"),GRAY("#808080");
+
+		private String value;
+
+		private OpenhabColors(String value) {
+			this.value = value;
+		}
+
+		public static OpenhabColors fromString(String text) {
+			if (text != null) {
+				for (OpenhabColors c : OpenhabColors.values()) {
+					if (text.equalsIgnoreCase(c.name())) {
+						return c;
+					}
+				}
+			}
+			return null;
+		}
 
 		public String toString() {
 			return this.value;
