@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2010-2014, openHAB.org and others.
+ * Copyright (c) 2010-2015, openHAB.org and others.
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -63,6 +63,14 @@ public class HmChannel {
 	 */
 	public List<HmDatapoint> getDatapoints() {
 		return datapoints;
+	}
+
+	/**
+	 * Adds a datapoint to the channel.
+	 */
+	public void addDatapoint(HmDatapoint datapoint) {
+		datapoint.setChannel(this);
+		datapoints.add(datapoint);
 	}
 
 	/**

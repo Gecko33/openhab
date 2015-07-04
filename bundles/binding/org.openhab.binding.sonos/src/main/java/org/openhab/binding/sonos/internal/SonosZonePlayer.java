@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2010-2014, openHAB.org and others.
+ * Copyright (c) 2010-2015, openHAB.org and others.
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -333,7 +333,6 @@ class SonosZonePlayer {
 			List<SonosEntry> stations = getFavoriteRadios();
 
 			SonosEntry theEntry = null;
-
 			// search for the appropriate radio based on its name (title)
 			for(SonosEntry someStation : stations){
 				if(someStation.getTitle().equals(station)){
@@ -347,6 +346,62 @@ class SonosZonePlayer {
 
 				SonosZonePlayer coordinator = sonosBinding.getCoordinatorForZonePlayer(this);
 				coordinator.setCurrentURI(theEntry);
+				coordinator.play();
+
+				return true;
+			}
+			else {
+				return false;
+			}	
+		} else {
+			return false;
+		}
+
+	}
+
+	/**
+	 * This will attempt to match the station string with a entry
+	 * in the favorites list, this supports both single entries and playlists
+	 * @param favorite to match
+	 * @return true if a match was found and played.
+	 */
+	public boolean playFavorite(String station){
+
+		if(isConfigured()) {
+
+			List<SonosEntry> stations = getFavorites();  
+
+			SonosEntry theEntry = null;
+			// search for the appropriate favorite based on its name (title)
+			for(SonosEntry someStation : stations){
+				if(someStation.getTitle().equals(station)){
+					theEntry = someStation;
+					break;
+				}
+			}
+
+			// set the URI of the group coordinator
+			if(theEntry != null) {
+				SonosZonePlayer coordinator = sonosBinding.getCoordinatorForZonePlayer(this);
+				
+				/**
+				 * If this is a playlist we need to treat it as such
+				 */
+				if(theEntry.getResourceMetaData() !=null && 
+						theEntry.getResourceMetaData().getUpnpClass().equals("object.container.playlistContainer")){
+					coordinator.removeAllTracksFromQueue();
+					coordinator.addURIToQueue(theEntry);
+					coordinator.setCurrentURI("x-rincon-queue:" + udn.getIdentifierString() + "#0", "");
+					if(stateMap != null && isConfigured()) {
+						StateVariableValue firstTrackNumberEnqueued = stateMap.get("FirstTrackNumberEnqueued");
+						if(firstTrackNumberEnqueued!=null) {
+							coordinator.seek("TRACK_NR", firstTrackNumberEnqueued.getValue().toString());
+						}
+					}
+				} else {
+					coordinator.setCurrentURI(theEntry);
+				}
+				
 				coordinator.play();
 
 				return true;
@@ -1106,7 +1161,7 @@ class SonosZonePlayer {
 	}
 
 	public boolean updateCurrentURIFormatted() {
-
+		
 		if(stateMap != null && isConfigured()) {
 
 			String currentURI = null;
@@ -1157,12 +1212,13 @@ class SonosZonePlayer {
 							logger.error("Could not parse RadioTime from String {}",response);
 						}
 
-						if(fields != null) {
+						resultString = new String();
 
-							resultString = new String();
-							// radio name should be first field
-							title = fields.get(0);
+						if(fields != null && fields.size()>1) {
 
+							artist = fields.get(0);
+							title = fields.get(1);
+							
 							Iterator<String> listIterator = fields.listIterator();
 							while(listIterator.hasNext()){
 								String field = listIterator.next();
@@ -1175,12 +1231,18 @@ class SonosZonePlayer {
 					} else {
 						resultString = stateMap.get("CurrentURIFormatted").getValue().toString();
 						title = stateMap.get("CurrentTitle").getValue().toString();
+						artist = stateMap.get("CurrentArtist").getValue().toString();
 					}
 
 
 				} else {
 					if(currentTrack != null) {
-						if(!currentTrack.getTitle().contains("x-sonosapi-stream")) {
+						if(currentTrack.getResource().contains("x-rincon-stream")) {
+							title = currentTrack.getTitle();
+							album = " ";
+							artist = " ";
+							resultString = title;
+						} else if(!currentTrack.getResource().contains("x-sonosapi-stream")) {
 							if (currentTrack.getAlbumArtist().equals("")) {
 								resultString = currentTrack.getCreator() + " - " + currentTrack.getAlbum() + " - " + currentTrack.getTitle();
 								artist = currentTrack.getCreator();
@@ -1191,18 +1253,26 @@ class SonosZonePlayer {
 
 							album = currentTrack.getAlbum();
 							title = currentTrack.getTitle();
-						}
+							
+							if(album.equals("")) {
+								album= " ";
+							}
 
+							if(artist.equals("")) {
+								artist= " ";
+							}
+						}
 					} else {
-						resultString = "";
+						title=" ";
+						album = " ";
+						artist = " ";
+						resultString = " ";
 					}
 				}
 
 				StateVariable newVariable = new StateVariable("CurrentURIFormatted",new StateVariableTypeDetails(Datatype.Builtin.STRING.getDatatype()));
 				StateVariableValue newValue = new StateVariableValue(newVariable, resultString);
-
 				processStateVariableValue(newVariable.getName(),newValue);		
-
 
 				// update individual variables
 				newVariable = new StateVariable("CurrentArtist",new StateVariableTypeDetails(Datatype.Builtin.STRING.getDatatype()));
@@ -1455,6 +1525,14 @@ class SonosZonePlayer {
 
 	public List<SonosEntry> getFavoriteRadios(){
 		return getEntries("R:0/0","dc:title,res,dc:creator,upnp:artist,upnp:album");
+	}
+	
+	/**
+	 * Searches for entries in the 'favorites' list on a sonos account
+	 * @return
+	 */
+	public List<SonosEntry> getFavorites(){
+		return getEntries("FV:2","dc:title,res,dc:creator,upnp:artist,upnp:album");
 	}
 
 	public List<SonosAlarm> getCurrentAlarmList(){

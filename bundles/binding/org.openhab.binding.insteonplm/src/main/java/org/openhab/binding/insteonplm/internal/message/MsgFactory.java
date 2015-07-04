@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2010-2013, openHAB.org and others.
+ * Copyright (c) 2010-2015, openHAB.org and others.
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -60,8 +60,9 @@ public class MsgFactory {
 	 * processData() needs to be called until it returns null, indicating that no
 	 * more messages can be formed from the data buffer.
 	 * @return a valid message, or null if the message is not complete
+	 * @throws IOException if data was received with unknown command codes
 	 */
-	public Msg processData() {
+	public Msg processData() throws IOException {
 		// handle the case where we get a pure nack
 		if (m_end > 0 && m_buf[0] == 0x15) {
 			logger.trace("got pure nack!");
@@ -75,8 +76,7 @@ public class MsgFactory {
 		}
 		// drain the buffer until the first byte is 0x02
 		if (m_end > 0 && m_buf[0] != 0x02) {
-			logger.error("incoming message does not start with 0x02, searching for start");
-			drainBuffer();
+			bail("incoming message does not start with 0x02");
 		}
 		// Now see if we have enough data for a complete message.
 		// If not, we return null, and expect this method to be called again
@@ -89,15 +89,17 @@ public class MsgFactory {
 			isExtended = Msg.s_isExtended(m_buf, m_end, headerLength);
 			logger.trace("header length expected: {} extended: {}", headerLength, isExtended);
 			if (headerLength < 0) {
-				logger.debug("got unknown command code {}, draining!", Utils.getHexByte(m_buf[1]));
-				// got unknown command code, drain the buffer and wait for more data
-				removeFromBuffer(1); // get rid of the leading 0x02
-				drainBuffer(); // this will drain until end or it finds the next 0x02
-				msgLen = -1; // signal that we don't have a message
+				removeFromBuffer(1); // get rid of the leading 0x02 so draining works
+				bail("got unknown command code " + Utils.getHexByte(m_buf[1]));
 			} else if (headerLength >= 2) {
 				if (m_end >= headerLength) {
 					// only when the header is complete do we know that isExtended is correct!
 					msgLen = Msg.s_getMessageLength(m_buf[1], isExtended);
+					if (msgLen < 0) {
+						// Cannot make sense out of the combined command code & isExtended flag.
+						removeFromBuffer(1);
+						bail("unknown command code/ext flag: " + Utils.getHexByte(m_buf[1]));
+					}
 				}
 			} else { // should never happen
 				logger.error("invalid header length, internal error!");
@@ -112,6 +114,12 @@ public class MsgFactory {
 		}
 		logger.trace("keeping buffer len {} data: {}", m_end, Utils.getHexString(m_buf, m_end));
 		return msg;
+	}
+	
+	private void bail(String txt) throws IOException {
+		drainBuffer(); // this will drain until end or it finds the next 0x02
+		logger.warn(txt);
+		throw new IOException(txt);
 	}
 	
 	private void drainBuffer() {

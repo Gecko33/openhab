@@ -1,3 +1,11 @@
+/**
+ * Copyright (c) 2010-2015, openHAB.org and others.
+ *
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ */
 package org.openhab.binding.homematic.internal.model;
 
 import java.util.ArrayList;
@@ -23,7 +31,7 @@ public class HmRemoteControlOptions {
 	 * Returns the text to send to the display.
 	 */
 	public String getText() {
-		return text == null ? "*NO_STRING*" : text;
+		return text;
 	}
 
 	/**
@@ -31,13 +39,6 @@ public class HmRemoteControlOptions {
 	 */
 	public void setText(String text) {
 		this.text = text;
-	}
-
-	/**
-	 * Returns the beep config as String.
-	 */
-	public String getBeepAsString() {
-		return String.valueOf(beep);
 	}
 
 	/**
@@ -53,13 +54,6 @@ public class HmRemoteControlOptions {
 	public int getBeep() {
 		return beep;
 	}
-	
-	/**
-	 * Returns the backlight config as String.
-	 */
-	public String getBacklightAsString() {
-		return String.valueOf(backlight);
-	}
 
 	/**
 	 * Sets the backlight config.
@@ -73,13 +67,6 @@ public class HmRemoteControlOptions {
 	 */
 	public int getBacklight() {
 		return backlight;
-	}
-
-	/**
-	 * Returns the unit config as String.
-	 */
-	public String getUnitAsString() {
-		return String.valueOf(unit);
 	}
 
 	/**

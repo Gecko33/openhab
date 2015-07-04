@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2010-2014, openHAB.org and others.
+ * Copyright (c) 2010-2015, openHAB.org and others.
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -8,9 +8,10 @@
  */
 package org.openhab.binding.homematic.internal.communicator;
 
-import org.openhab.binding.homematic.internal.config.binding.ValueBindingConfig;
+import org.openhab.binding.homematic.internal.config.binding.ActionConfig;
 import org.openhab.binding.homematic.internal.config.binding.HomematicBindingConfig;
 import org.openhab.binding.homematic.internal.config.binding.ProgramConfig;
+import org.openhab.binding.homematic.internal.config.binding.ValueBindingConfig;
 import org.openhab.binding.homematic.internal.config.binding.VariableConfig;
 import org.openhab.binding.homematic.internal.model.HmDatapoint;
 import org.openhab.binding.homematic.internal.model.HmValueItem;
@@ -23,7 +24,7 @@ import org.openhab.core.types.Type;
 
 /**
  * Common Event class for Homematic and openHAB events.
- * Used by the CcuCommunicator.
+ * Used by the HomematicCommunicator.
  * 
  * @author Gerhard Riegler
  * @since 1.5.0
@@ -36,7 +37,7 @@ public class Event {
 	private Object newValue;
 
 	/**
-	 * Creates a new event received from the CCU.
+	 * Creates a new event received from the Homematic server.
 	 */
 	public Event(HomematicBindingConfig bindingConfig, Object newValue) {
 		this.bindingConfig = bindingConfig;
@@ -116,10 +117,28 @@ public class Event {
 	}
 
 	/**
+	 * Returns true if the bindingConfig is a action.
+	 */
+	public boolean isAction() {
+		return bindingConfig instanceof ActionConfig;
+	}
+
+	/**
 	 * Returns true if the bindingConfig is a variable.
 	 */
 	public boolean isVariable() {
 		return bindingConfig instanceof VariableConfig;
+	}
+
+	/**
+	 * Returns the delay of the event in seconds.
+	 */
+	public double getDelay() {
+		if (bindingConfig instanceof ValueBindingConfig) {
+			ValueBindingConfig vbConfig = (ValueBindingConfig)bindingConfig;
+			return vbConfig.getDelay();
+		}
+		return 0;
 	}
 
 	/**
