@@ -18,7 +18,7 @@ import org.slf4j.LoggerFactory;
  * Extension of the default OSGi bundle activator
  * 
  * @author JeromeCourat
- * @since 1.4.0
+ * @since 1.8.0
  */
 public final class WMR100Activator implements BundleActivator {
 

@@ -19,7 +19,7 @@ import org.openhab.model.item.binding.BindingConfigParseException;
  * This class is responsible for parsing the binding configuration.
  * 
  * @author JeromeCourat
- * @since 1.4.0
+ * @since 1.8.0
  */
 public class WMR100GenericBindingProvider extends AbstractGenericBindingProvider implements WMR100BindingProvider {
 	

@@ -34,7 +34,7 @@ import com.codeminders.hidapi.HIDManager;
  * like querying a Website/Device.
  * 
  * @author JeromeCourat
- * @since 1.4.0
+ * @since 1.8.0
  */
 public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> implements ManagedService, WxLogger.DataListener {
 
