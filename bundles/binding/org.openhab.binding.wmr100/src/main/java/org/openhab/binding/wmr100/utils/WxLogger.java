@@ -8,25 +8,23 @@
  */
 package org.openhab.binding.wmr100.utils;
 
-import com.codeminders.hidapi.HIDDevice; // use HID devices
-import com.codeminders.hidapi.HIDManager; // use HID manager
-
-import java.io.BufferedWriter; // use buffered writers
-import java.io.File; // use files
-import java.io.FileWriter; // use file writers
-import java.io.IOException; // use I/O exceptions
-import java.text.SimpleDateFormat; // use simple dates
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays; // use arrays
-import java.util.Calendar; // use calendars
-import java.util.HashMap; // use hashmaps
+import java.util.Arrays;
+import java.util.Calendar;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Timer; // use timers
-import java.util.TimerTask; // use timer tasks
+import java.util.Timer;
+import java.util.TimerTask;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.codeminders.hidapi.HIDDevice;
 
 /**
  * <p>This class is derived from the excellent work made by 
@@ -43,15 +41,11 @@ import org.slf4j.LoggerFactory;
  */
 public class WxLogger {
 	
+	private static boolean active;
+	
 	private static final Logger logger = LoggerFactory.getLogger(WxLogger.class);
 	
 	public static Map<String,Object> DATA = new HashMap<String, Object>();
-
-	// ******************************** Constants
-	// ********************************
-
-	// ---------------------------- general constants
-	// ----------------------------
 
 	/** Battery description (indexed by battery code) */
 	private static final String[] BATTERY_DESCRIPTION = { "OK", "Low" };
@@ -64,20 +58,11 @@ public class WxLogger {
 			"ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W",
 			"WNW", "NW", "NNW" };
 
-	/** Format for log dates */
-	private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("HH:mm:ss dd/MM/yy");
-
 	/** Dummy value for initialisation */
 	private static final float DUMMY_VALUE = -999.0f;
 
 	/** Weather station data frame delimiter */
 	private static final int FRAME_BYTE = (byte) 0xFF;
-
-	/** Human Interface Device native library name */
-	private static final String HID_LIBRARY = "hidapi-jni-64";
-
-	/** File name for last day's data */
-	private static final String LAST_DAY = "LAST_DAY.DAT";
 
 	/** Console log output has frames and timestamped messages as received */
 	private static final int LOG_FRAME = (byte) 0x02;
@@ -116,15 +101,6 @@ public class WxLogger {
 	// ------------------------ customisation constants
 	// --------------------------
 
-	/**
-	 * Directory path for archive files (default '/tmp', must not be '.', or end
-	 * with '/' or '\'); if empty, no archiving takes place
-	 */
-	private static final String ARCHIVE_PATH = "/tmp";
-
-	/** Backup last day's data midnight if true */
-	private static final boolean BACKUP_LOG = true;
-
 	/** Degree character */
 	private static final String DEGREE = "\u00B0"; // with Unicode console
 	// ""; // without Unicode console
@@ -133,8 +109,7 @@ public class WxLogger {
 	private static final int LOG_DEFAULT = LOG_HOUR;
 
 	/** Logging interval (minutes, must be sub-multiple of 60) */
-//	private static final int LOG_INTERVAL = 15;
-	private static final int LOG_INTERVAL = 1;
+	private static final int LOG_INTERVAL = 15;
 
 	/** Channel for outdoor sensor (value 1/2/4? = channel 1/2/3) */
 	private static final int OUTDOOR_SENSOR = 1;
@@ -246,21 +221,11 @@ public class WxLogger {
 	/** Weather station USB vendor identifier */
 	private static final int STATION_VENDOR = 0x0FDE;
 
-	// ******************************** Variables
-	// ********************************
-
-	// ---------------------------- general variables
-	// ----------------------------
-
 	/** Logical OR of individual flags */
-	private static int logFlags = LOG_SENSOR;
-//	private static int logFlags = LOG_FRAME | LOG_HOUR | LOG_SENSOR | LOG_USB;
+	private static int logFlags = LOG_FRAME | LOG_HOUR | LOG_SENSOR | LOG_USB;
 
 	/** Number of consecutive full stop characters from console */
 	private static int stopCount;
-
-	// ----------------------------- clock variables
-	// ----------------------------
 
 	/** Clock day (0..31) */
 	private static int clockDay;
@@ -279,9 +244,6 @@ public class WxLogger {
 
 	/** Timer that signals every minute */
 	private static Timer minuteTimer = new Timer();
-
-	// ------------------------- measurement variables
-	// ---------------------------
 
 	/** Count of measurement values (indexes measurement, period) */
 	private static int[][] measureCount = new int[MEASURE_SIZE][PERIOD_SIZE];
@@ -328,9 +290,6 @@ public class WxLogger {
 	// ----------------------------- USB variables
 	// ------------------------------
 
-	/** Human Interface Device manager instance */
-	private static HIDManager hidManager;
-
 	/** Human Interface Device instance */
 	private static HIDDevice hidDevice;
 
@@ -369,28 +328,27 @@ public class WxLogger {
 	 * @param value
 	 *            measure value
 	 */
-	private static void addMeasure(int measure, float value) {
-		if (0 <= measure && measure < MEASURE_SIZE && // measure in range and
-														// ...
-				0 <= period && period < PERIOD_SIZE) { // period in range?
+	private static void addMeasure(int measure, float value) { 
+		if (0 <= measure && measure < MEASURE_SIZE && 0 <= period && period < PERIOD_SIZE) { // measure in range and period in range?
 			int count = measureCount[measure][period];// get measurement count
 			if (count == 0) { // no previous measurements?
 				measureMin[measure][period] = value; // initialise minimum
 				measureMax[measure][period] = value; // initialise maximum
 				measureTotal[measure][period] = value; // initialise total
 			} else { // previous measurements
-				if (value < measureMin[measure][period])// new minimum?
+				if (value < measureMin[measure][period]) {// new minimum?
 					measureMin[measure][period] = value; // set minimum
-				if (value > measureMax[measure][period])// new maximum?
+				}
+				if (value > measureMax[measure][period]) {// new maximum?
 					measureMax[measure][period] = value; // set maximum
+				}
 				measureTotal[measure][period] += value; // add value
 			}
-			measureCount[measure][period] = count + 1;// increment measurement
-														// count
-		} else
+			measureCount[measure][period] = count + 1;// increment measurement count
+		} else {
 			// measure/period out of range
-			logError("Measure " + measure + " and period " + period
-					+ " must be in range"); // report error
+			logError(String.format("Measure %s and period %s must be in range", measure, period));
+		}
 	}
 
 	/**
@@ -403,50 +361,46 @@ public class WxLogger {
 	 *            sensor data
 	 */
 	private static void analyseAnemometer(byte[] frame) {
-		String batteryDescription = // get battery level description
-		getBattery(getInt(frame[0]) / 64);
-		statusAnemometer = // set anemometer battery status
-		setBatteryStatus(CODE_ANEMOMETER, batteryDescription);
-		float windGust = // get wind speed gust (m/s)
-		(256.0f * (getInt(frame[5]) % 16) + getInt(frame[4])) / 10.0f;
-		float windAverage = // get wind speed average (m/s)
-		(16.0f * getInt(frame[6]) + getInt(frame[5]) / 16) / 10.0f;
+		String batteryDescription = getBattery(getInt(frame[0]) / 64); // get battery level description
+		
+		statusAnemometer = setBatteryStatus(CODE_ANEMOMETER, batteryDescription); // set anemometer battery status
+		
+		float windGust = (256.0f * (getInt(frame[5]) % 16) + getInt(frame[4])) / 10.0f;// get wind speed gust (m/s)
+		
+		float windAverage = (16.0f * getInt(frame[6]) + getInt(frame[5]) / 16) / 10.0f;// get wind speed average (m/s)
+		
 		int windDirection = frame[2] % 16; // get wind direction (16ths)
-		String directionDescription = // get wind direction descr.
-		getDirection(windDirection);
-		windDirection = // get wind direction (deg)
-		Math.round((frame[2] % 16) * 22.5f);
+		String directionDescription = getDirection(windDirection);// get wind direction descr.
+		
+		windDirection = Math.round((frame[2] % 16) * 22.5f);// get wind direction (deg)
+		
 		int chillSign = getInt(frame[8]) / 16; // get wind chill sign quartet
 		boolean chillValid = (chillSign & 0x2) == 0;// get wind chill validity
 		chillSign = getSign(chillSign / 8); // get wind chill sign
-		float windChill = chillSign * // get wind chill (deg C)
-				getInt(frame[7]);
-		String chillDescription = // set wind chill description
-		chillValid ? Float.toString(windChill) + DEGREE : "N/A";
-		if ((logFlags & LOG_SENSOR) != 0) // sensor data to be output?
-			logInfo( // log sensor data
-			"Anemometer: " + "Direction " + windDirection + DEGREE + " ("
-					+ directionDescription + "), " + "Average " + windAverage
-					+ "m/s, " + "Gust " + windGust + "m/s, " + "Chill "
-					+ chillDescription + ", " + "Battery " + batteryDescription);
+		float windChill = chillSign * getInt(frame[7]); // get wind chill (deg C)
+				
+		String chillDescription = chillValid ? Float.toString(windChill) + DEGREE : "N/A";// set wind chill description
+		
+		if ((logFlags & LOG_SENSOR) != 0) {// sensor data to be output?
+			logInfo(String.format("Anemometer: Direction %s %s (%s), Average %s m/s, Gust %s m/s, Chill %s, Battery %s", 
+					windDirection, DEGREE, directionDescription, windAverage, windGust, chillDescription, batteryDescription));
+		}
 		if (outdoorTemperature != DUMMY_VALUE) { // outdoor temperature known?
 			if (windGust > 1.3) { // wind speed high enough?
-				float windPower = // get (gust speed)^0.16
-				(float) Math.pow(windGust, 0.16);
-				windChill = // calculate wind chill (deg C)
-				13.12f + (0.6215f * outdoorTemperature) - (13.956f * windPower)
-						+ (0.487f * outdoorTemperature * windPower);
-				if (windChill > outdoorTemperature) // invalid chill
-													// calculation?
-					windChill = outdoorTemperature; // reset chill to outdoor
-													// temp.
-			} else
+				float windPower = (float) Math.pow(windGust, 0.16);// get (gust speed)^0.16
+				windChill = 13.12f + (0.6215f * outdoorTemperature) - (13.956f * windPower) + (0.487f * outdoorTemperature * windPower);// calculate wind chill (deg C)
+				
+				if (windChill > outdoorTemperature) {// invalid chill calculation?
+					windChill = outdoorTemperature; // reset chill to outdoor temp.
+				}
+			} else {
 				// wind speed not high enough
 				windChill = outdoorTemperature; // set chill to outdoor temp.
-		} else if (!chillValid) // no outdoor temp. or chill?
+			}
+		} else if (!chillValid) {// no outdoor temp. or chill?
 			windChill = 0.0f; // set dummy chill of 0 (deg C)
-		addMeasure(INDEX_WIND_DIRECTION, windDirection); // add wind dir
-															// measurement
+		}
+		addMeasure(INDEX_WIND_DIRECTION, windDirection); // add wind dir measurement
 		addMeasure(INDEX_WIND_SPEED, windAverage); // add wind speed measurement
 		addMeasure(INDEX_WIND_CHILL, windChill); // add wind chill measurement
 		
@@ -465,22 +419,17 @@ public class WxLogger {
 	 *            sensor data
 	 */
 	private static void analyseBarometer(byte[] frame) {
-		int pressureAbsolute = // get absolute pressure (mb)
-		256 * (getInt(frame[3]) % 16) + getInt(frame[2]);
-		int pressureRelative = // get relative pressure (mb)
-		256 * (getInt(frame[5]) % 16) + getInt(frame[4]);
-		String weatherForecast = // get forecast weather descrip.
-		getWeather(getInt(frame[3]) / 16);
-		String weatherPrevious = // get previous weather descrip.
-		getWeather(getInt(frame[5]) / 16);
-		if ((logFlags & LOG_SENSOR) != 0) // sensor data to be output?
-			logInfo( // log sensor data
-			"Barometer: " + "Pressure (Abs.) " + pressureAbsolute + "mb, "
-					+ "Pressure (Rel.) " + pressureRelative + "mb, "
-					+ "Forecast " + weatherForecast + ", " + "Previous "
-					+ weatherPrevious);
-		addMeasure(INDEX_INDOOR_PRESSURE, // add absolute pressure
-				pressureAbsolute);
+		int pressureAbsolute = 256 * (getInt(frame[3]) % 16) + getInt(frame[2]);// get absolute pressure (mb)
+		int pressureRelative = 256 * (getInt(frame[5]) % 16) + getInt(frame[4]);// get relative pressure (mb)
+		String weatherForecast = getWeather(getInt(frame[3]) / 16);// get forecast weather descrip.
+		String weatherPrevious = getWeather(getInt(frame[5]) / 16);// get previous weather descrip.
+		
+		if ((logFlags & LOG_SENSOR) != 0) {// sensor data to be output?
+			logInfo(String.format("Barometer: Pressure (Abs.) %s mb, Pressure (Rel.) %s mb, Forecast %s, Previous %s.", 
+					pressureAbsolute, pressureRelative, weatherForecast, weatherPrevious));
+		}
+				
+		addMeasure(INDEX_INDOOR_PRESSURE, pressureAbsolute);// add absolute pressure
 		
 		// JCO - always Sensor 0 for those data.
 		DATA.put("pressureAbsolute:0", pressureAbsolute); // in mb
@@ -512,11 +461,10 @@ public class WxLogger {
 		String radioDescription = getRadio(radioLevel); // get radio description
 		String time = getTime(hour, minute); // get current time
 		String date = getDate(year, month, day); // get current date
-		if ((logFlags & LOG_SENSOR) != 0) // sensor data to be output?
-			logInfo( // log sensor data
-			"Clock: " + "Time " + time + ", " + "Date " + date + ", " + "UTC "
-					+ String.format("%+2d", zoneSign * zone) + "h, " + "Radio "
-					+ radioLevel + " (" + radioDescription + ")");
+		if ((logFlags & LOG_SENSOR) != 0) {// sensor data to be output?
+			logInfo(String.format("Clock: Time %s, Date %s, UTC %sh, Radio %s (%s).", 
+					time, date, String.format("%+2d", zoneSign*zone), radioLevel, radioDescription));
+		}
 	}
 
 	/**
@@ -578,24 +526,24 @@ public class WxLogger {
 	 *            sensor data
 	 */
 	private static void analyseRainfall(byte[] frame) {
-		String batteryDescription = // get battery level description
-		getBattery(getInt(frame[0]) / 64);
-		statusRain = // set rain gauge battery status
-		setBatteryStatus(CODE_RAINFALL, batteryDescription);
-		float rainRate = // get rainfall rate (mm/hr)
-		getRain(256.0f * getInt(frame[3]) + getInt(frame[2]));
-		float rainRecent = // get recent (mm)
-		getRain(256.0f * getInt(frame[5]) + getInt(frame[4]));
-		float rainDay = // get rainfall for day (mm)
-		getRain(256.0f * getInt(frame[7]) + getInt(frame[6]));
-		float rainReset = // get rainfall since reset (mm)
-		getRain(256.0f * getInt(frame[9]) + getInt(frame[8]));
-		if (rainInitial == DUMMY_VALUE) // initial rain offset unknown?
+		String batteryDescription = getBattery(getInt(frame[0]) / 64);// get battery level description
+		
+		statusRain = setBatteryStatus(CODE_RAINFALL, batteryDescription); // set rain gauge battery status
+		
+		float rainRate = getRain(256.0f * getInt(frame[3]) + getInt(frame[2]));// get rainfall rate (mm/hr)
+		
+		float rainRecent = getRain(256.0f * getInt(frame[5]) + getInt(frame[4])); // get recent (mm)
+		
+		float rainDay = getRain(256.0f * getInt(frame[7]) + getInt(frame[6]));// get rainfall for day (mm)
+		
+		float rainReset = getRain(256.0f * getInt(frame[9]) + getInt(frame[8])); // get rainfall since reset (mm)
+		
+		if (rainInitial == DUMMY_VALUE) {// initial rain offset unknown?
 			rainInitial = rainReset; // use rain since last reset
-		else if (rainReset < rainInitial) // rain memory has been reset?
+		} else if (rainReset < rainInitial) {// rain memory has been reset?
 			rainInitial = -rainInitial; // adjust initial rain offset
-		float rainMidnight = // set rain total since midnight
-		Math.round(10.0f * (rainReset - rainInitial)) / 10.0f; // to 1 dec.
+		}
+		float rainMidnight = Math.round(10.0f * (rainReset - rainInitial)) / 10.0f;// set rain total since midnight to 1 dec.
 																// place
 		int minute = getInt(frame[10]) % 60; // get minute, limited to 59
 		int hour = getInt(frame[11]) % 24; // get hour, limited to 23
@@ -605,15 +553,11 @@ public class WxLogger {
 														// 99
 		String resetTime = getTime(hour, minute); // get last reset time
 		String resetDate = getDate(year, month, day); // get last reset date
-		if ((logFlags & LOG_SENSOR) != 0) // sensor data to be output?
-			logInfo( // log sensor data
-			"Rain Gauge: " + "Rate " + rainRate + "mm/h, " + "Recent "
-					+ rainRecent + "mm, " + "24 Hour " + rainDay + "mm, "
-					+ "From Midnight " + rainMidnight + "mm, " + "From Reset "
-					+ rainReset + "mm, " + "Reset " + resetTime + " "
-					+ resetDate + ", " + "Battery " + batteryDescription);
-		addMeasure(INDEX_RAIN_TOTAL, rainMidnight); // add daily rain
-													// measurement
+		if ((logFlags & LOG_SENSOR) != 0) {// sensor data to be output?
+			logInfo(String.format("Rain Gauge: Rate %s mm/h, Recent %s mm, 24 Hour %s mm, From Midnight %s mm, From Reset %s mm, Reset %s %s, Battery %s", 
+					rainRate, rainRecent, rainDay, rainMidnight, rainReset, resetTime, resetDate, batteryDescription));
+		}
+		addMeasure(INDEX_RAIN_TOTAL, rainMidnight); // add daily rain measurement
 	}
 
 	/**
@@ -626,46 +570,45 @@ public class WxLogger {
 	 * @throws input
 	 *             -output exception
 	 */
-	private static void analyseResponse(int bytes, byte[] buffer)
-			throws IOException {
+	private static void analyseResponse(int bytes, byte[] buffer) throws IOException {
 		int i, j; // buffer positions
 		int count = buffer[0]; // get buffer count
 		if (bytes > 0 & count > 0) { // response data to check?
-			if ((logFlags & LOG_USB) != 0) // USB logging?
+			if ((logFlags & LOG_USB) != 0) {// USB logging?
 				logBuffer("USB", bytes, buffer); // output USB response
-			if (count < buffer.length && // will not overflow buffers?
-					stationNext + count <= stationBuffer.length) {
-				for (i = 0; i < count; i++)
+			}
+			if (count < buffer.length && stationNext + count <= stationBuffer.length) {// will not overflow buffers?
+					
+				for (i = 0; i < count; i++) {
 					// go through response bytes
-					stationBuffer[stationNext++] = // copy USB to station buffer
-					buffer[i + 1];
+					stationBuffer[stationNext++] = buffer[i + 1];// copy USB to station buffer
+				}
 				int startDelimiter = getDelimiter(0); // check for frame start
 				if (startDelimiter != -1) { // frame start found?
 					startDelimiter += 2; // move past frame start
-					int finishDelimiter = // check for frame finish
-					getDelimiter(startDelimiter);
+					int finishDelimiter = getDelimiter(startDelimiter); // check for frame finish
+					
 					if (finishDelimiter != -1) { // frame finish found?
-						if (startDelimiter < finishDelimiter) { // non-empty
-																// frame?
-							byte[] frameBuffer = // copy station data to frame
-							Arrays.copyOfRange(stationBuffer, startDelimiter,
-									finishDelimiter);
+						if (startDelimiter < finishDelimiter) { // non-empty frame?
+							byte[] frameBuffer = Arrays.copyOfRange(stationBuffer, startDelimiter, finishDelimiter); // copy station data to frame
 							analyseFrame(frameBuffer); // analyse frame
 							i = 0; // initialise "to" index
-							for (j = finishDelimiter; j < stationNext; j++)
+							for (j = finishDelimiter; j < stationNext; j++) {
 								// go through data
-								stationBuffer[i++] = // copy following data down
-								stationBuffer[j];
+								stationBuffer[i++] = stationBuffer[j];// copy following data down
+							}
 							stationNext = i; // set new station data start
-						} else
+						} else {
 							// empty frame
 							logError("Empty frame received"); // report error
+						}
 					}
 				}
-			} else
+			} else {
 				// will overflow buffers
-				logError("Over-long response received - count " + count
-						+ ", buffer index " + stationNext); // report error
+				// report error
+				logError(String.format("Over-long response received - count %s, buffer index %s", count, stationNext)); 
+			}
 		}
 	}
 
@@ -682,49 +625,31 @@ public class WxLogger {
 		String batteryDescription = // get battery level description
 		getBattery(getInt(frame[0]) / 64);
 		int sensor = getInt(frame[2]) % 16; // get sensor number
-		int temperatureSign = // get temperature sign
-		getSign(getInt(frame[4]) / 16);
-		float temperature = temperatureSign * // get temperature (deg C)
-				(256.0f * (getInt(frame[4]) % 16) + getInt(frame[3])) / 10.0f;
-		String temperatureTrend = // get temperature trend
-		getTrend((getInt(frame[0]) / 16) % 4);
+		int temperatureSign = getSign(getInt(frame[4]) / 16);// get temperature sign
+		float temperature = temperatureSign * (256.0f * (getInt(frame[4]) % 16) + getInt(frame[3])) / 10.0f;// get temperature (deg C)
+		String temperatureTrend = getTrend((getInt(frame[0]) / 16) % 4);// get temperature trend
 		int humidity = getInt(frame[5]) % 100; // get humidity (%)
-		String humidityTrend = // get humidity trend
-		getTrend((getInt(frame[2]) / 16) % 4);
-		int dewpointSign = // get dewpoint sign
-		getSign(getInt(frame[7]) / 16);
-		float dewpoint = dewpointSign * // get dewpoint (deg C)
-				(256.0f * (getInt(frame[7]) % 16) + getInt(frame[6])) / 10.0f;
-		boolean heatValid = // get heat index validity
-		(getInt(frame[9]) & 0x20) == 0;
-		float heatIndex = dewpointSign * // get heat index (deg C)
-				fahrenheitCelsius((256.0f * (getInt(frame[9]) % 8) + getInt(frame[8])) / 10.0f);
-		String heatDescription = // get heat index description
-		heatValid ? heatIndex + DEGREE + "C" : "N/A";
-		if ((logFlags & LOG_SENSOR) != 0) // sensor data to be output?
-			logInfo( // log sensor data
-			"Thermohygrometer: " + "Sensor " + sensor + ", " + "Temperature "
-					+ temperature + DEGREE + "C (" + temperatureTrend + "), "
-					+ "Humidity " + humidity + "% (" + humidityTrend + "), "
-					+ "Dewpoint " + dewpoint + DEGREE + "C, " + "Index "
-					+ heatDescription + ", " + "Battery " + batteryDescription);
+		String humidityTrend = getTrend((getInt(frame[2]) / 16) % 4);// get humidity trend
+		int dewpointSign = getSign(getInt(frame[7]) / 16);// get dewpoint sign
+		float dewpoint = dewpointSign * (256.0f * (getInt(frame[7]) % 16) + getInt(frame[6])) / 10.0f;// get dewpoint (deg C)
+		boolean heatValid = (getInt(frame[9]) & 0x20) == 0;// get heat index validity
+		float heatIndex = dewpointSign * fahrenheitCelsius((256.0f * (getInt(frame[9]) % 8) + getInt(frame[8])) / 10.0f);// get heat index (deg C)
+		String heatDescription = heatValid ? heatIndex + DEGREE + "C" : "N/A";// get heat index description
+		
+		if ((logFlags & LOG_SENSOR) != 0) { // sensor data to be output?
+			logInfo(String.format("Thermohygrometer: Sensor %s, Temperature %s %sC (%s), Humidity %s %% (%s), Dewpoint %s %s C, Index %s, Battery", 
+					sensor, temperature, DEGREE, temperatureTrend, humidity, humidityTrend, dewpoint, heatDescription, batteryDescription));
+		}
 		if (sensor == 0) { // indoor sensor?
-			addMeasure(INDEX_INDOOR_TEMPERATURE, // add indoor temperature
-					temperature);
-			addMeasure(INDEX_INDOOR_HUMIDITY, // add indoor humidity
-					humidity);
-			addMeasure(INDEX_INDOOR_DEWPOINT, // add indoor dewpoint
-					dewpoint);
+			addMeasure(INDEX_INDOOR_TEMPERATURE, temperature);// add indoor temperature
+			addMeasure(INDEX_INDOOR_HUMIDITY, humidity);// add indoor humidity
+			addMeasure(INDEX_INDOOR_DEWPOINT, dewpoint);// add indoor dewpoint
 		} else if (sensor == OUTDOOR_SENSOR) { // outdoor sensor?
-			statusThermohygrometer = // set thermo. battery status
-			setBatteryStatus(CODE_THERMOHYGROMETER, batteryDescription);
+			statusThermohygrometer = setBatteryStatus(CODE_THERMOHYGROMETER, batteryDescription);// set thermo. battery status
 			outdoorTemperature = temperature; // set outdoor temperature
-			addMeasure(INDEX_OUTDOOR_TEMPERATURE, // add outdoor temperature
-					temperature);
-			addMeasure(INDEX_OUTDOOR_HUMIDITY, // add outdoor humidity
-					humidity);
-			addMeasure(INDEX_OUTDOOR_DEWPOINT, // add outdoor dewpoint
-					dewpoint);
+			addMeasure(INDEX_OUTDOOR_TEMPERATURE, temperature);// add outdoor temperature
+			addMeasure(INDEX_OUTDOOR_HUMIDITY, humidity);// add outdoor humidity
+			addMeasure(INDEX_OUTDOOR_DEWPOINT, dewpoint);// add outdoor dewpoint
 		}
 		// JCO
 		DATA.put("temperature:" + sensor, temperature);
@@ -739,16 +664,15 @@ public class WxLogger {
 	 *            sensor data
 	 */
 	private static void analyseUV(byte[] frame) {
-		String batteryDescription = // get battery level description
-		getBattery(getInt(frame[0]) / 64);
-		statusUV = // set UV sensor battery status
-		setBatteryStatus(CODE_UV, batteryDescription);
+		String batteryDescription = getBattery(getInt(frame[0]) / 64); // get battery level description
+		
+		statusUV = setBatteryStatus(CODE_UV, batteryDescription);// set UV sensor battery status
+		
 		int uvIndex = getInt(frame[3]) & 0xF; // get UV index
 		String uvDescription = getUV(uvIndex); // get UV index description
-		if ((logFlags & LOG_SENSOR) != 0) // sensor data to be output?
-			logInfo( // log sensor data
-			"UV: " + "Index " + uvIndex + " (" + uvDescription + "), "
-					+ "Battery " + batteryDescription);
+		if ((logFlags & LOG_SENSOR) != 0) {// sensor data to be output?
+			logInfo(String.format("UV: Index %s (%s), Battery %s", uvIndex, uvDescription, batteryDescription));
+		}
 		addMeasure(INDEX_UV_INDEX, uvIndex); // add UV index measurement
 	}
 
@@ -803,71 +727,11 @@ public class WxLogger {
 	 */
 	private static int getDelimiter(int pos) {
 		for (int i = pos; i < stationNext - 2; i++) {
-			if (stationBuffer[i] == FRAME_BYTE
-					&& stationBuffer[i + 1] == FRAME_BYTE)
+			if (stationBuffer[i] == FRAME_BYTE && stationBuffer[i + 1] == FRAME_BYTE) {
 				return (i);
-		}
-		return (-1);
-	}
-
-	/**
-	 * Check console for input.
-	 * 
-	 * @throws input
-	 *             -output exception
-	 */
-	private static void checkConsole() throws IOException {
-		String consoleIn = ""; // initialise console input
-		while (System.in.available() > 0)
-			// console input available?
-			consoleIn += (char) System.in.read(); // append next console
-													// character
-		consoleIn = consoleIn.trim(); // remove white space/EOL
-		for (int i = 0; i < consoleIn.length(); i++) { // go through console
-														// input
-			char ch = consoleIn.charAt(i); // get console character
-			switch (ch) { // check character
-			case '0': // no output?
-				stopCount = 0; // re-initialise stop count
-				logFlags = 0; // set no logging
-				logInfo("Now reporting nothing"); // report no logging
-				break; // leave switch
-			case '1': // hourly data?
-				stopCount = 0; // re-initialise stop count
-				logFlags = LOG_HOUR; // set hour log
-				logInfo("Now reporting hourly data"); // report logging level
-				break; // leave switch
-			case '2': // hourly/sensor data?
-				stopCount = 0; // re-initialise stop count
-				logFlags = LOG_HOUR | LOG_SENSOR; // set hour/sensor log
-				logInfo( // report logging level
-				"Now reporting hourly/sensor data");
-				break; // leave switch
-			case '3': // hourly/sensor/frame data?
-				stopCount = 0; // re-initialise stop count
-				logFlags = // set hour/sensor/frame log
-				LOG_HOUR | LOG_SENSOR | LOG_FRAME;
-				logInfo( // report logging level
-				"Now reporting hourly/sensor/frame data");
-				break; // leave switch
-			case '4': // hourly/sensor/frame/USB data?
-				stopCount = 0; // re-initialise stop count
-				logFlags = // set hour/sensor/frame/USB log
-				LOG_HOUR | LOG_SENSOR | LOG_FRAME | LOG_USB;
-				logInfo( // report logging level
-				"Now reporting hourly/sensor/frame/USB data");
-				break; // leave switch
-			case '.': // full stop?
-				stopCount++; // increment stop count
-				if (stopCount >= 2) { // full stop already entered?
-					logInfo("Program exited by user"); // log exit
-					System.exit(2); // exit program with code 2
-				} else
-					// full stop not already entered
-					logInfo( // log one full stop received
-					"Use '.' again to quit (then Enter)");
 			}
 		}
+		return (-1);
 	}
 
 	/**
@@ -889,10 +753,8 @@ public class WxLogger {
 	 * @return battery description
 	 */
 	private static String getBattery(int batteryCode) {
-		int batteryIndex = batteryCode == 0 ? 0 : 1;// get battery description
-													// index
-		return (BATTERY_DESCRIPTION[batteryIndex]); // return battery
-													// description
+		int batteryIndex = batteryCode == 0 ? 0 : 1;// get battery description index
+		return (BATTERY_DESCRIPTION[batteryIndex]); // return battery description
 	}
 
 	/**
@@ -919,8 +781,7 @@ public class WxLogger {
 	 * @return DD/MM/YYYY
 	 */
 	private static String getDate(int year, int month, int day) {
-		return ( // return DD/MM/YYYY
-		String.format("%02d/%02d/%04d", day, month, year));
+		return (String.format("%02d/%02d/%04d", day, month, year));  // return DD/MM/YYYY
 	}
 
 	/**
@@ -931,10 +792,7 @@ public class WxLogger {
 	 * @return wind direction description
 	 */
 	private static String getDirection(int directionCode) {
-		return ( // return wind direction descr.
-		directionCode < DIRECTION_DESCRIPTION.length // weather dir. in range?
-		? DIRECTION_DESCRIPTION[directionCode]
-				: "Unknown");
+		return (directionCode < DIRECTION_DESCRIPTION.length ? DIRECTION_DESCRIPTION[directionCode] : "Unknown");// return wind direction descr. // weather dir. in range?
 	}
 
 	/**
@@ -956,10 +814,7 @@ public class WxLogger {
 	 * @return radio description
 	 */
 	private static String getRadio(int radioCode) {
-		return ( // return radio description
-		radioCode < RADIO_DESCRIPTION.length // radio code in range?
-		? RADIO_DESCRIPTION[radioCode]
-				: "Strong");
+		return (radioCode < RADIO_DESCRIPTION.length ? RADIO_DESCRIPTION[radioCode] : "Strong");// return radio description // radio code in range?
 	}
 
 	/**
@@ -997,8 +852,7 @@ public class WxLogger {
 	 * @return HH:MM
 	 */
 	private static String getTime(int hour, int minute) {
-		return ( // return HH:MM
-		String.format("%02d:%02d", hour, minute));
+		return (String.format("%02d:%02d", hour, minute)); // return HH:MM
 	}
 
 	/**
@@ -1009,10 +863,7 @@ public class WxLogger {
 	 * @return trend description
 	 */
 	private static String getTrend(int trendCode) {
-		return ( // return trend description
-		trendCode < TREND_DESCRIPTION.length // trend code in range?
-		? TREND_DESCRIPTION[trendCode]
-				: "Unknown");
+		return (trendCode < TREND_DESCRIPTION.length ? TREND_DESCRIPTION[trendCode] : "Unknown"); // return trend description// trend code in range?
 	}
 
 	/**
@@ -1023,10 +874,8 @@ public class WxLogger {
 	 * @return uvCode description
 	 */
 	private static String getUV(int uvCode) {
-		int uvIndex = // get UV description index
-		uvCode >= 11 ? 4 : uvCode >= 8 ? 3 : uvCode >= 6 ? 2 : uvCode >= 3 ? 1
-				: 0;
-		return (UV_DESCRIPTION[uvIndex]); // return UV description
+		int uvIndex = (uvCode >= 11 ? 4 : uvCode >= 8 ? 3 : uvCode >= 6 ? 2 : uvCode >= 3 ? 1 : 0);
+		return (UV_DESCRIPTION[uvIndex]); // get UV description index // return UV description
 	}
 
 	/**
@@ -1037,10 +886,7 @@ public class WxLogger {
 	 * @return weather description
 	 */
 	private static String getWeather(int weatherCode) {
-		return ( // return weather description
-		weatherCode < WEATHER_DESCRIPTION.length // weather code in range?
-		? WEATHER_DESCRIPTION[weatherCode]
-				: "Unknown");
+		return (weatherCode < WEATHER_DESCRIPTION.length ? WEATHER_DESCRIPTION[weatherCode]	: "Unknown"); // return weather description // weather code in range?
 	}
 
 	/**
@@ -1061,8 +907,9 @@ public class WxLogger {
 		now.set(Calendar.MILLISECOND, 0); // set zero msec
 		firstDelay = now.getTimeInMillis() - firstDelay; // get msec to next
 															// minute
-		if (firstDelay < 0) // already at next minute?
+		if (firstDelay < 0) {// already at next minute?
 			firstDelay = 0; // set no delay
+		}
 		TimerTask minuteTask = new TimerTask() { // create minute timer task
 			public void run() { // define task execution
 				try { // try to check minutes
@@ -1073,37 +920,27 @@ public class WxLogger {
 				}
 			}
 		};
-		minuteTimer.scheduleAtFixedRate( // schedule minute checks
-				minuteTask, firstDelay, 60000); // set task, delay, 1 minute
+		minuteTimer.scheduleAtFixedRate(minuteTask, firstDelay, 60000); // schedule minute checks // set task, delay, 1 minute
+				 
 
 		responseLength.put(CODE_ANEMOMETER, 11); // set anemometer frame length
 		responseLength.put(CODE_BAROMETER, 8); // set barometer frame length
 		responseLength.put(CODE_CLOCK, 12); // set clock frame length
 		responseLength.put(CODE_RAINFALL, 17); // set rainfall frame length
-		responseLength.put(CODE_THERMOHYGROMETER, 12); // set thermo. frame
-														// length
+		responseLength.put(CODE_THERMOHYGROMETER, 12); // set thermo. frame length
 		responseLength.put(CODE_UV, 6); // set UV frame length
-
 		measureFormat[INDEX_WIND_SPEED] = "%5.1f"; // wind speed format
 		measureFormat[INDEX_WIND_DIRECTION] = "%4.0f"; // wind direction format
-		measureFormat[INDEX_OUTDOOR_TEMPERATURE] = "%6.1f"; // outdoor temp.
-															// format
-		measureFormat[INDEX_OUTDOOR_HUMIDITY] = "%3.0f"; // outdoor humidity
-															// format
-		measureFormat[INDEX_OUTDOOR_DEWPOINT] = "%6.1f"; // outdoor dewpoint
-															// format
-		measureFormat[INDEX_INDOOR_PRESSURE] = "%7.1f"; // indoor pressure
-														// format
-		measureFormat[INDEX_INDOOR_TEMPERATURE] = "%6.1f"; // indoor temp.
-															// format
-		measureFormat[INDEX_INDOOR_HUMIDITY] = "%3.0f"; // indoor humidity
-														// format
+		measureFormat[INDEX_OUTDOOR_TEMPERATURE] = "%6.1f"; // outdoor temp. format
+		measureFormat[INDEX_OUTDOOR_HUMIDITY] = "%3.0f"; // outdoor humidity format
+		measureFormat[INDEX_OUTDOOR_DEWPOINT] = "%6.1f"; // outdoor dewpoint format
+		measureFormat[INDEX_INDOOR_PRESSURE] = "%7.1f"; // indoor pressure format
+		measureFormat[INDEX_INDOOR_TEMPERATURE] = "%6.1f"; // indoor temp. format
+		measureFormat[INDEX_INDOOR_HUMIDITY] = "%3.0f"; // indoor humidity format
 		measureFormat[INDEX_RAIN_TOTAL] = "%4.0f"; // rainfall total format
 		measureFormat[INDEX_WIND_CHILL] = "%6.1f"; // outdoor wind chill format
-		measureFormat[INDEX_INDOOR_DEWPOINT] = "%6.1f"; // indoor dewpoint
-														// format
+		measureFormat[INDEX_INDOOR_DEWPOINT] = "%6.1f"; // indoor dewpoint format
 		measureFormat[INDEX_UV_INDEX] = "%3.0f"; // outdoor UV index format
-
 		lastTime = 0; // set no time for last data
 		outdoorTemperature = DUMMY_VALUE; // set outdoor temp. unknown
 		rainInitial = DUMMY_VALUE; // set no midnight rain offset
@@ -1120,14 +957,16 @@ public class WxLogger {
 		statusRain = STATUS_OK; // assume rain gauge status OK
 		statusThermohygrometer = STATUS_OK; // assume thermo. status OK
 		statusUV = STATUS_OK; // assume UV sensor status OK
-		if (clockHour == 0) // midnight?
+		if (clockHour == 0) {// midnight?
 			rainInitial = DUMMY_VALUE; // reset midnight rain offset
+		}
 		period = clockMinute / LOG_INTERVAL; // set current period number
 		periodLow = period; // set first period number
 		for (int p = periodLow; p < PERIOD_SIZE; p++) { // go through periods
-			for (int m = 0; m < MEASURE_SIZE; m++)
+			for (int m = 0; m < MEASURE_SIZE; m++) {
 				// go through measurements
 				measureCount[m][p] = 0; // initialise measure count
+			}
 		}
 	}
 
@@ -1143,10 +982,10 @@ public class WxLogger {
 	 */
 	private static void logBuffer(String prefix, int bytes, byte[] buffer) {
 		String response = ""; // initialise response message
-		for (int i = 0; i < bytes; i++)
+		for (int i = 0; i < bytes; i++) {
 			// go through buffer bytes
-			response += // append buffer byte in hex
-			String.format(" %02X", buffer[i]);
+			response += String.format(" %02X", buffer[i]); // append buffer byte in hex
+		}
 		logInfo(prefix + response); // log buffer content message
 	}
 
@@ -1198,15 +1037,12 @@ public class WxLogger {
 	 *             -output exception
 	 */
 	private static void logMeasures() throws IOException {
-		File logFile = new File( // set log file
-				String.format("%04d%02d%02d.DAT", clockYear, clockMonth,
-						clockDay));
+		File logFile = new File(String.format("%04d%02d%02d.DAT", clockYear, clockMonth, clockDay)); // set log file
 		BufferedWriter logWriter = // open log file for appending
 		new BufferedWriter(new FileWriter(logFile, true));
-		for (int p = periodLow; p < PERIOD_SIZE; p++) { // go through each
-														// period
-			String report = // start rep. line with HH:MM:SS
-			String.format("%02d:%02d:00", clockHour, p * LOG_INTERVAL);
+		for (int p = periodLow; p < PERIOD_SIZE; p++) { // go through each period
+			String report = String.format("%02d:%02d:00", clockHour, p * LOG_INTERVAL);  // start rep. line with HH:MM:SS
+			
 			for (int m = 0; m < MEASURE_SIZE; m++) { // go through measurements
 				String format = measureFormat[m]; // get measurement format
 				int count = measureCount[m][p]; // get measurement count
@@ -1220,13 +1056,14 @@ public class WxLogger {
 					total = measureTotal[m][p]; // get measurement total
 					average = total / count; // calculate average measure
 				}
-				if (m != INDEX_RAIN_TOTAL) // not rainfall total?
-					report += String.format( // output average/min/max
-							format + format + format, average, min, max);
-				else
+				if (m != INDEX_RAIN_TOTAL) { // not rainfall total?
+					report += String.format(format + format + format, average, min, max); // output average/min/max
+				}
+				else {
 					// rainfall total
-					report += // output average rainfall
-					String.format(format, average);
+					report += String.format(format, average);// output average rainfall
+					
+				}
 			}
 			logWriter.write(report); // output report line
 			logWriter.newLine(); // append newline to log
@@ -1261,47 +1098,54 @@ public class WxLogger {
 			for (int m = 0; m < MEASURE_SIZE; m++) { // go through measurements
 				int count = 0; // initialise measurement count
 				float total = 0.0f; // initialise measurement total
-				for (int p = periodLow; p < PERIOD_SIZE; p++) { // go through
-																// periods
-					int actualCount = measureCount[m][p]; // get measurement
-															// count
+				for (int p = periodLow; p < PERIOD_SIZE; p++) { // go through periods
+					int actualCount = measureCount[m][p]; // get measurement count
 					if (actualCount > 0) { // non-zero measurement count?
 						count += actualCount; // add measurement count
 						total += measureTotal[m][p]; // add measurement total
-					} else
+					} else {
 						// zero measurement count
 						setMissingStatus(m); // set missing data status
+					}
 				}
 				float average = 0.0f; // initialise average
-				if (count > 0) // non-zero count?
+				if (count > 0) {// non-zero count?
 					average = total / count; // calculate average
-				if (m == INDEX_WIND_SPEED) // wind speed?
+				}
+				if (m == INDEX_WIND_SPEED) { // wind speed?
 					report += String.format("Wind"
 							+ measureFormat[INDEX_WIND_SPEED] + "m/s"
 							+ statusAnemometer, average);
-				else if (m == INDEX_WIND_DIRECTION) // wind direction?
+				}
+				else if (m == INDEX_WIND_DIRECTION) {// wind direction?
 					report += String.format("Dir"
 							+ measureFormat[INDEX_WIND_DIRECTION] + DEGREE
 							+ ' ', average);
-				else if (m == INDEX_OUTDOOR_TEMPERATURE)// outdoor temperature?
+				}
+				else if (m == INDEX_OUTDOOR_TEMPERATURE) {// outdoor temperature?
 					report += String.format("Temp"
 							+ measureFormat[INDEX_OUTDOOR_TEMPERATURE] + DEGREE
 							+ 'C' + statusThermohygrometer, average);
-				else if (m == INDEX_OUTDOOR_HUMIDITY) // outdoor humidity?
+				}
+				else if (m == INDEX_OUTDOOR_HUMIDITY) {// outdoor humidity?
 					report += String.format("Hum"
 							+ measureFormat[INDEX_OUTDOOR_HUMIDITY] + "%% ",
 							average);
-				else if (m == INDEX_INDOOR_PRESSURE) // indoor pressure (NNNN)?
+				}
+				else if (m == INDEX_INDOOR_PRESSURE) {// indoor pressure (NNNN)?
 					report += String.format("Press" + "%5.0f" + "mb"
 							+ statusBarometer, average);
-				else if (m == INDEX_RAIN_TOTAL) // rainfall total?
+				}
+				else if (m == INDEX_RAIN_TOTAL) {// rainfall total?
 					report += String.format("Rain"
 							+ measureFormat[INDEX_RAIN_TOTAL] + "mm"
 							+ statusRain, average);
-				else if (m == INDEX_UV_INDEX) // rainfall total?
+				}
+				else if (m == INDEX_UV_INDEX) {// rainfall total?
 					report += String
 							.format("UV" + measureFormat[INDEX_UV_INDEX]
 									+ statusUV, average);
+				}
 			}
 			logInfo(report); // output hourly report
 		}
@@ -1317,21 +1161,22 @@ public class WxLogger {
 	 *            battery description
 	 * @return battery status symbol
 	 */
-	private static char setBatteryStatus(byte sensorCode,
-			String batteryDescription) {
+	private static char setBatteryStatus(byte sensorCode, String batteryDescription) {
 		char batterySymbol = // get battery status symbol
 		batteryDescription.equals("OK") ? STATUS_OK : STATUS_BATTERY;
 		if (batterySymbol == STATUS_BATTERY) { // battery low?
-			if (sensorCode == CODE_ANEMOMETER) // anemometer?
+			if (sensorCode == CODE_ANEMOMETER) {// anemometer?
 				statusAnemometer = batterySymbol; // set anemometer status
-			else if (sensorCode == CODE_RAINFALL) // rain gauge?
+			}
+			else if (sensorCode == CODE_RAINFALL) {// rain gauge?
 				statusRain = batterySymbol; // set rain gauge status
-			else if (sensorCode == CODE_THERMOHYGROMETER) // outdoor
-															// thermohygrometer?
-				statusThermohygrometer = batterySymbol; // set thermohygrometer
-														// status
-			else if (sensorCode == CODE_UV) // UV sensor?
+			}
+			else if (sensorCode == CODE_THERMOHYGROMETER) {// outdoor thermohygrometer?
+				statusThermohygrometer = batterySymbol; // set thermohygrometer status
+			}
+			else if (sensorCode == CODE_UV) {// UV sensor?
 				statusUV = batterySymbol; // set UV sensor status
+			}
 		}
 		return (batterySymbol); // return battery status symbol
 	}
@@ -1344,19 +1189,22 @@ public class WxLogger {
 	 *            measurement index
 	 */
 	private static void setMissingStatus(int measurementIndex) {
-		if (measurementIndex == INDEX_WIND_DIRECTION || // anemometer?
-				measurementIndex == INDEX_WIND_SPEED)
+		if (measurementIndex == INDEX_WIND_DIRECTION ||  measurementIndex == INDEX_WIND_SPEED) {// anemometer?
 			statusAnemometer = STATUS_MISSING; // set anemometer status
-		else if (measurementIndex == INDEX_INDOOR_PRESSURE) // barometer?
+		}
+		else if (measurementIndex == INDEX_INDOOR_PRESSURE) {// barometer?
 			statusBarometer = STATUS_MISSING; // set rain gauge status
-		else if (measurementIndex == INDEX_RAIN_TOTAL) // rain gauge?
+		}
+		else if (measurementIndex == INDEX_RAIN_TOTAL) {// rain gauge?
 			statusRain = STATUS_MISSING; // set rain gauge status
-		else if (measurementIndex == INDEX_OUTDOOR_HUMIDITY || // thermohygrometer?
-				measurementIndex == INDEX_OUTDOOR_TEMPERATURE)
-			statusThermohygrometer = STATUS_MISSING; // set thermohygrometer
-														// status
-		else if (measurementIndex == INDEX_UV_INDEX) // UV sensor?
+		}
+		else if (measurementIndex == INDEX_OUTDOOR_HUMIDITY || measurementIndex == INDEX_OUTDOOR_TEMPERATURE) {// thermohygrometer?
+				
+			statusThermohygrometer = STATUS_MISSING; // set thermohygrometer status
+		}
+		else if (measurementIndex == INDEX_UV_INDEX) {// UV sensor?
 			statusUV = STATUS_MISSING; // set UV sensor status
+		}
 	}
 
 	/**
@@ -1382,20 +1230,24 @@ public class WxLogger {
 	 *             -output exception
 	 */
 	public static void stationRead() throws IOException {
-		while (true) { // loop indefinitely
+		active = true;
+		logger.debug("Entering STATION READ loop...");
+		while (active) { // loop indefinitely
 			logger.debug("STATION READ");
-//			checkConsole(); // deal with console input
 			long actualTime = currentTime(); // get current time in msec
-			if (actualTime - lastTime > // data request timeout passed?
-			STATION_TIMEOUT * 1000) {
+			if (actualTime - lastTime > STATION_TIMEOUT * 1000) {// data request timeout passed?
+				logger.debug("Performing station request");
 				stationRequest(); // request data from station
 				lastTime = actualTime; // note last data request time
 			}
-			responseBytes = // read HID data with time limit
-			hidDevice.readTimeout(responseBuffer, RESPONSE_TIMEOUT * 1000);
-			analyseResponse( // analyse HID responses
-					responseBytes, responseBuffer);
+			responseBytes = hidDevice.readTimeout(responseBuffer, RESPONSE_TIMEOUT * 1000);// read HID data with time limit
+			analyseResponse(responseBytes, responseBuffer); // analyse HID responses
 		}
+		logger.debug("Exited STATION READ loop.");
+	}
+	
+	public static void stopRead() {
+		active = false;
 	}
 	
 	/**
@@ -1406,12 +1258,11 @@ public class WxLogger {
 	 */
 	private static void stationRequest() throws IOException {
 		logger.debug("STATION REQUEST");
-		if (logFlags != 0 && logFlags != LOG_HOUR) // not just hourly data?
+		if (logFlags != 0 && logFlags != LOG_HOUR) {// not just hourly data?
 			logInfo("Requested weather station data");// output newline
-		responseBytes = // send initialisation command
-		hidDevice.write(STATION_INITIALISATION);
-		responseBytes = // send data request command
-		hidDevice.write(STATION_REQUEST);
+		}
+		responseBytes = hidDevice.write(STATION_INITIALISATION);// send initialisation command
+		responseBytes = hidDevice.write(STATION_REQUEST);// send data request command
 	}
 
 	/**
@@ -1426,18 +1277,16 @@ public class WxLogger {
 		int byteSum = 0; // initialise byte sum
 		boolean valid = false; // overall validity
 		if (length >= 2) { // at least a two-byte frame?
-			for (int i = 0; i < length - 2; i++)
-				// go through non-checksum bytes
+			for (int i = 0; i < length - 2; i++) {// go through non-checksum bytes
 				byteSum += getInt(frame[i]); // add byte to sum
-			int checkSum = // get expected sum
-			256 * getInt(frame[length - 1]) + getInt(frame[length - 2]);
+			}
+			int checkSum = 256 * getInt(frame[length - 1]) + getInt(frame[length - 2]);// get expected sum
+			
 			valid = checkSum == byteSum; // get checksum validity
 			if (valid) { // checksum valid?
 				Byte sensorCode = frame[1]; // get sensor code
-				Integer sensorLength = // get sensor frame length
-				responseLength.get(sensorCode);
-				valid = // get length validity
-				sensorLength != null && sensorLength.intValue() == length;
+				Integer sensorLength = responseLength.get(sensorCode);// get sensor frame length
+				valid = sensorLength != null && sensorLength.intValue() == length;// get length validity
 			}
 		}
 		// else // not at least a two-byte frame

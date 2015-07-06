@@ -12,7 +12,7 @@ import org.openhab.core.binding.BindingProvider;
 
 /**
  * @author JeromeCourat
- * @since 1.4.0
+ * @since 1.8.0
  */
 public interface WMR100BindingProvider extends BindingProvider {
 	

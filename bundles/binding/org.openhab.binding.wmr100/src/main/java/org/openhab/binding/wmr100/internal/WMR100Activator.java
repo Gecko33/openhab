@@ -31,7 +31,7 @@ public final class WMR100Activator implements BundleActivator {
 	 */
 	public void start(BundleContext bc) throws Exception {
 		context = bc;
-		logger.debug("WMR100 binding has been started.");
+		logger.info("WMR100 binding has been started.");
 		// use system properties: osgi.os and osg.arch
 		String osgiArch = System.getProperty("osgi.arch");
 		String osgiOs = System.getProperty("osgi.os");
@@ -55,7 +55,7 @@ public final class WMR100Activator implements BundleActivator {
 	 */
 	public void stop(BundleContext bc) throws Exception {
 		context = null;
-		logger.debug("WMR100 binding has been stopped.");
+		logger.info("WMR100 binding has been stopped.");
 	}
 	
 	/**

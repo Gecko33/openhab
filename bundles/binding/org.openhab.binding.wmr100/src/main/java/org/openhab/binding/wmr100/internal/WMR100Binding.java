@@ -40,8 +40,6 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 
 	private static final Logger logger = LoggerFactory.getLogger(WMR100Binding.class);
 	
-	private boolean stationInitialized = false;
-	
 	private boolean running = false;
 
 	
@@ -115,6 +113,7 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 	}
 	
 	public void deactivate() {
+		WxLogger.stopRead();
 		// deallocate resources here that are no longer needed and 
 		// should be reset when activating this binding again
 		if (hidDevice != null) {
@@ -151,6 +150,7 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 	@Override
 	protected void execute() {
 		if (running) return;
+		logger.debug("WMR100Binding#execute()");
 		try {
 			if (hidDevice == null) {
 				logger.warn("HID Device not yet open.");
