@@ -72,8 +72,11 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 	/** HID Device, aka. WMR100 handler */
 	protected HIDDevice hidDevice;
 	
+	protected WxLogger wxLogger;
+	
 	
 	public WMR100Binding() {
+		wxLogger = new WxLogger();
 	}
 		
 	
@@ -90,7 +93,7 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 				hidDevice = hidManager.openById(DEFAULT_STATION_VENDOR, DEFAULT_STATION_PRODUCT, null);
 				if (hidDevice != null) {
 					logger.info("HID Device found:" + hidDevice.getManufacturerString());
-					WxLogger.setDevice(hidDevice);
+					wxLogger.setDevice(hidDevice);
 					retryCounter = 0;
 					return; // we're finished with startup!
 				} else {
@@ -113,7 +116,7 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 	}
 	
 	public void deactivate() {
-		WxLogger.stopRead();
+		wxLogger.stopRead();
 		// deallocate resources here that are no longer needed and 
 		// should be reset when activating this binding again
 		if (hidDevice != null) {
@@ -123,7 +126,7 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 			} catch (IOException e) {
 				logger.error("Could not properly close HID Device", e);
 			}
-			WxLogger.setDevice(null);
+			wxLogger.setDevice(null);
 		}
 	}
 
@@ -157,9 +160,9 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 				return;
 			}
 			running = true;
-			WxLogger.addDataListener(this);
-			WxLogger.initialise();
-			WxLogger.stationRead();
+			wxLogger.addDataListener(this);
+			wxLogger.initialise();
+			wxLogger.stationRead();
 		} catch (IOException e) {
 			logger.warn("WxLogger could not properly read data.", e);
 			running = false;

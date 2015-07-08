@@ -41,11 +41,11 @@ import com.codeminders.hidapi.HIDDevice;
  */
 public class WxLogger implements WMRConstants {
 	
-	private static boolean active;
+	private boolean active;
 	
-	private static final Logger logger = LoggerFactory.getLogger(WxLogger.class);
+	private final Logger logger = LoggerFactory.getLogger(WxLogger.class);
 	
-	public static Map<String,Object> DATA = new HashMap<String, Object>();
+	public Map<String,Object> data = new HashMap<String, Object>();
 
 	
 
@@ -53,73 +53,73 @@ public class WxLogger implements WMRConstants {
 	// --------------------------
 
 	/** Degree character */
-	private static final String DEGREE = "\u00B0"; // with Unicode console
+	private final String DEGREE = "\u00B0"; // with Unicode console
 	// ""; // without Unicode console
 
 	/** Default log flags (logical OR of individual log flags) */
-	private static final int LOG_DEFAULT = LOG_HOUR;
+	private final int LOG_DEFAULT = LOG_HOUR;
 
 	/** Logging interval (minutes, must be sub-multiple of 60) */
-	private static final int LOG_INTERVAL = 15;
+	private final int LOG_INTERVAL = 15;
 
 	/** Channel for outdoor sensor (value 1/2/4? = channel 1/2/3) */
-	private static final int OUTDOOR_SENSOR = 1;
+	private final int OUTDOOR_SENSOR = 1;
 
 	// -------------------------- measurement constants
 	// --------------------------
 
 	/** Number of measurement types */
-	private static final int MEASURE_SIZE = 12;
+	private final int MEASURE_SIZE = 12;
 
 	/** Number of periods per hour */
-	private static final int PERIOD_SIZE = 60 / LOG_INTERVAL;
+	private final int PERIOD_SIZE = 60 / LOG_INTERVAL;
 
 	/** Low battery status symbol */
-	private static final char STATUS_BATTERY = '!';
+	private final char STATUS_BATTERY = '!';
 
 	/** Missing data status symbol */
-	private static final char STATUS_MISSING = '?';
+	private final char STATUS_MISSING = '?';
 
 	/** Sensor status OK symbol */
-	private static final char STATUS_OK = ' ';
+	private final char STATUS_OK = ' ';
 
 	// ------------------------------ USB constants
 	// ------------------------------
 
 	/** Anemometer code */
-	private final static byte CODE_ANEMOMETER = (byte) 0x48;
+	private final byte CODE_ANEMOMETER = (byte) 0x48;
 
 	/** Barometer code */
-	private final static byte CODE_BAROMETER = (byte) 0x46;
+	private final byte CODE_BAROMETER = (byte) 0x46;
 
 	/** Clock code */
-	private final static byte CODE_CLOCK = (byte) 0x60;
+	private final byte CODE_CLOCK = (byte) 0x60;
 
 	/** Rainfall bucket code */
-	private final static byte CODE_RAINFALL = (byte) 0x41;
+	private final byte CODE_RAINFALL = (byte) 0x41;
 
 	/** Thermohygrometer code */
-	private final static byte CODE_THERMOHYGROMETER = (byte) 0x42;
+	private final byte CODE_THERMOHYGROMETER = (byte) 0x42;
 
 	/** UV code */
-	private final static byte CODE_UV = (byte) 0x47;
+	private final byte CODE_UV = (byte) 0x47;
 
 	/** Size of buffer for USB responses (bytes) */
-	private static final int RESP0NSE_SIZE = 9;
+	private final int RESP0NSE_SIZE = 9;
 
 	/** Timeout for reading USB data (sec) */
-	private static final int RESPONSE_TIMEOUT = 10;
+	private final int RESPONSE_TIMEOUT = 10;
 
 	/** Weather station initialisation command */
-	private static final byte[] STATION_INITIALISATION = { (byte) 0x00,
+	private final byte[] STATION_INITIALISATION = { (byte) 0x00,
 			(byte) 0x20, (byte) 0x00, (byte) 0x08, (byte) 0x01, (byte) 0x00,
 			(byte) 0x00, (byte) 0x00, (byte) 0x00 };
 
 	/** Weather station USB product identifier */
-	private static final int STATION_PRODUCT = 0xCA01;
+	private final int STATION_PRODUCT = 0xCA01;
 
 	/** Weather station data request command */
-	private static final byte[] STATION_REQUEST = { (byte) 0x00, (byte) 0x01,
+	private final byte[] STATION_REQUEST = { (byte) 0x00, (byte) 0x01,
 			(byte) 0xD0, (byte) 0x08, (byte) 0x01, (byte) 0x00, (byte) 0x00,
 			(byte) 0x00, (byte) 0x00 };
 
@@ -128,103 +128,103 @@ public class WxLogger implements WMRConstants {
 	 * (sec); this should be more than 60 seconds (the normal response interval
 	 * of a WMR100)
 	 */
-	private static final int STATION_TIMEOUT = 90;
+	private final int STATION_TIMEOUT = 90;
 
 	/** Size of buffer for accumulated USB data (bytes) */
-	private static final int STATION_SIZE = 100;
+	private final int STATION_SIZE = 100;
 
 	/** Weather station USB vendor identifier */
-	private static final int STATION_VENDOR = 0x0FDE;
+	private final int STATION_VENDOR = 0x0FDE;
 
 	/** Logical OR of individual flags */
-	private static int logFlags = LOG_FRAME | LOG_HOUR | LOG_SENSOR | LOG_USB;
+	private int logFlags = LOG_FRAME | LOG_HOUR | LOG_SENSOR | LOG_USB;
 
 	/** Number of consecutive full stop characters from console */
-	private static int stopCount;
+	private int stopCount;
 
 	/** Clock day (0..31) */
-	private static int clockDay;
+	private int clockDay;
 
 	/** Clock hour (0..23) */
-	private static int clockHour;
+	private int clockHour;
 
 	/** Clock minute (0..59) */
-	private static int clockMinute;
+	private int clockMinute;
 
 	/** Clock day (1..12) */
-	private static int clockMonth;
+	private int clockMonth;
 
 	/** Clock day (1..12) */
-	private static int clockYear;
+	private int clockYear;
 
 	/** Timer that signals every minute */
-	private static Timer minuteTimer = new Timer();
+	private Timer minuteTimer = new Timer();
 
 	/** Count of measurement values (indexes measurement, period) */
-	private static int[][] measureCount = new int[MEASURE_SIZE][PERIOD_SIZE];
+	private int[][] measureCount = new int[MEASURE_SIZE][PERIOD_SIZE];
 
 	/** Print format strings for reporting measurements */
-	private static String[] measureFormat = new String[MEASURE_SIZE];
+	private String[] measureFormat = new String[MEASURE_SIZE];
 
 	/** Minimum measurement values (indexes measurement, period) */
-	private static float[][] measureMin = new float[MEASURE_SIZE][PERIOD_SIZE];
+	private float[][] measureMin = new float[MEASURE_SIZE][PERIOD_SIZE];
 
 	/** Maximum measurement values (indexes measurement, period) */
-	private static float[][] measureMax = new float[MEASURE_SIZE][PERIOD_SIZE];
+	private float[][] measureMax = new float[MEASURE_SIZE][PERIOD_SIZE];
 
 	/** Total measurement values (indexes measurement, period) */
-	private static float[][] measureTotal = new float[MEASURE_SIZE][PERIOD_SIZE];
+	private float[][] measureTotal = new float[MEASURE_SIZE][PERIOD_SIZE];
 
 	/** Rainfall total for midnight */
-	private static float outdoorTemperature;
+	private float outdoorTemperature;
 
 	/** Current period index in hour */
-	private static int period;
+	private int period;
 
 	/** Lowest period index (normally 0, different for first hour of running) */
-	private static int periodLow;
+	private int periodLow;
 
 	/** Initial rainfall offset (normally rain since midnight in mm) */
-	private static float rainInitial;
+	private float rainInitial;
 
 	/** Anemometer status */
-	private static char statusAnemometer;
+	private char statusAnemometer;
 
 	/** Barometer status */
-	private static char statusBarometer;
+	private char statusBarometer;
 
 	/** Rain gauge status */
-	private static char statusRain;
+	private char statusRain;
 
 	/** Outdoor thermohygrometer status */
-	private static char statusThermohygrometer;
+	private char statusThermohygrometer;
 
 	/** UV sensor status */
-	private static char statusUV;
+	private char statusUV;
 
 	// ----------------------------- USB variables
 	// ------------------------------
 
 	/** Human Interface Device instance */
-	private static HIDDevice hidDevice;
+	private HIDDevice hidDevice;
 
 	/** Last time sensor data was received or data was requested (msec) */
-	private static long lastTime;
+	private long lastTime;
 
 	/** USB response buffer */
-	private static byte[] responseBuffer = new byte[RESP0NSE_SIZE];
+	private byte[] responseBuffer = new byte[RESP0NSE_SIZE];
 
 	/** USB response length for each sensor code */
-	private static HashMap<Byte, Integer> responseLength = new HashMap<Byte, Integer>();
+	private HashMap<Byte, Integer> responseLength = new HashMap<Byte, Integer>();
 
 	/** USB response byte count */
-	private static int responseBytes;
+	private int responseBytes;
 
 	/** Accumulated USB data buffer */
-	private static byte[] stationBuffer = new byte[STATION_SIZE];
+	private byte[] stationBuffer = new byte[STATION_SIZE];
 
 	/** Next index to be used in accumulated USB data buffer */
-	private static int stationNext;
+	private int stationNext;
 
 	// ******************************* Main Program
 	// ******************************
@@ -243,7 +243,7 @@ public class WxLogger implements WMRConstants {
 	 * @param value
 	 *            measure value
 	 */
-	private static void addMeasure(int measure, float value) { 
+	private void addMeasure(int measure, float value) { 
 		if (0 <= measure && measure < MEASURE_SIZE && 0 <= period && period < PERIOD_SIZE) { // measure in range and period in range?
 			int count = measureCount[measure][period];// get measurement count
 			if (count == 0) { // no previous measurements?
@@ -275,7 +275,7 @@ public class WxLogger implements WMRConstants {
 	 * @param frame
 	 *            sensor data
 	 */
-	private static void analyseAnemometer(byte[] frame) {
+	private void analyseAnemometer(byte[] frame) {
 		String batteryDescription = WMRUtils.getBattery(WMRUtils.getInt(frame[0]) / 64); // get battery level description
 		
 		statusAnemometer = setBatteryStatus(CODE_ANEMOMETER, batteryDescription); // set anemometer battery status
@@ -321,10 +321,10 @@ public class WxLogger implements WMRConstants {
 		
 		// JCO: we'll consider sensor is 0, since no sensor ID is sent in this frame.
 		// Nevertheless, only one wind sensor seems to be connectable.
-		DATA.put("windDirection:0", windDirection);
-		DATA.put("windGust:0", windGust);
-		DATA.put("windAverage:0", windAverage);
-		DATA.put("windChill:0", windChill);
+		data.put("windDirection:0", windDirection);
+		data.put("windGust:0", windGust);
+		data.put("windAverage:0", windAverage);
+		data.put("windChill:0", windChill);
 	}
 
 	/**
@@ -333,7 +333,7 @@ public class WxLogger implements WMRConstants {
 	 * @param frame
 	 *            sensor data
 	 */
-	private static void analyseBarometer(byte[] frame) {
+	private void analyseBarometer(byte[] frame) {
 		int pressureAbsolute = 256 * (WMRUtils.getInt(frame[3]) % 16) + WMRUtils.getInt(frame[2]);// get absolute pressure (mb)
 		int pressureRelative = 256 * (WMRUtils.getInt(frame[5]) % 16) + WMRUtils.getInt(frame[4]);// get relative pressure (mb)
 		String weatherForecast = WMRUtils.getWeather(WMRUtils.getInt(frame[3]) / 16);// get forecast weather descrip.
@@ -347,10 +347,10 @@ public class WxLogger implements WMRConstants {
 		addMeasure(INDEX_INDOOR_PRESSURE, pressureAbsolute);// add absolute pressure
 		
 		// JCO - always Sensor 0 for those data.
-		DATA.put("pressureAbsolute:0", pressureAbsolute); // in mb
-		DATA.put("pressureRelative:0", pressureRelative); // in mb
-		DATA.put("weatherForecast:0", weatherForecast); // text
-		DATA.put("weatherPrevious:0", weatherPrevious); // text
+		data.put("pressureAbsolute:0", pressureAbsolute); // in mb
+		data.put("pressureRelative:0", pressureRelative); // in mb
+		data.put("weatherForecast:0", weatherForecast); // text
+		data.put("weatherPrevious:0", weatherPrevious); // text
 	}
 
 	/**
@@ -362,7 +362,7 @@ public class WxLogger implements WMRConstants {
 	 * @throws input
 	 *             -output exception
 	 */
-	private static void analyseClock(byte[] frame) throws IOException {
+	private void analyseClock(byte[] frame) throws IOException {
 		int minute = WMRUtils.getInt(frame[4]) % 60; // get minute, limited to 59
 		int hour = WMRUtils.getInt(frame[5]) % 24; // get hour, limited to 23
 		int day = WMRUtils.getInt(frame[6]) % 32; // get day, limited to 31
@@ -389,7 +389,7 @@ public class WxLogger implements WMRConstants {
 	 * @throws input
 	 *             -output exception
 	 */
-	private static void analyseFrame(byte[] frame) throws IOException {
+	private void analyseFrame(byte[] frame) throws IOException {
 		if ((logFlags & LOG_FRAME) != 0) // frame output needed?
 			logBuffer("Frame", frame.length, frame); // output frame buffer
 		if (validFrame(frame)) { // frame checksum valid?
@@ -426,7 +426,7 @@ public class WxLogger implements WMRConstants {
 			}
 			// JCO now let's notify listeners, then clear data map.
 			pushData();
-			WxLogger.DATA.clear();
+			data.clear();
 		}
 		else // frame checksum invalid
 			logInfo("Invalid frame checksum");
@@ -439,7 +439,7 @@ public class WxLogger implements WMRConstants {
 	 * @param frame
 	 *            sensor data
 	 */
-	private static void analyseRainfall(byte[] frame) {
+	private void analyseRainfall(byte[] frame) {
 		String batteryDescription = WMRUtils.getBattery(WMRUtils.getInt(frame[0]) / 64);// get battery level description
 		
 		statusRain = setBatteryStatus(CODE_RAINFALL, batteryDescription); // set rain gauge battery status
@@ -484,7 +484,7 @@ public class WxLogger implements WMRConstants {
 	 * @throws input
 	 *             -output exception
 	 */
-	private static void analyseResponse(int bytes, byte[] buffer) throws IOException {
+	private void analyseResponse(int bytes, byte[] buffer) throws IOException {
 		int i, j; // buffer positions
 		int count = buffer[0]; // get buffer count
 		if (bytes > 0 & count > 0) { // response data to check?
@@ -535,7 +535,7 @@ public class WxLogger implements WMRConstants {
 	 * @param frame
 	 *            sensor data
 	 */
-	private static void analyseThermohygrometer(byte[] frame) {
+	private void analyseThermohygrometer(byte[] frame) {
 		String batteryDescription = WMRUtils.getBattery(WMRUtils.getInt(frame[0]) / 64);// get battery level description
 		int sensor = WMRUtils.getInt(frame[2]) % 16; // get sensor number
 		int temperatureSign = WMRUtils.getSign(WMRUtils.getInt(frame[4]) / 16);// get temperature sign
@@ -565,9 +565,9 @@ public class WxLogger implements WMRConstants {
 			addMeasure(INDEX_OUTDOOR_DEWPOINT, dewpoint);// add outdoor dewpoint
 		}
 		// JCO
-		DATA.put("temperature:" + sensor, temperature);
-		DATA.put("humidity:" + sensor, humidity);
-		DATA.put("dewpoint:" + sensor, dewpoint);
+		data.put("temperature:" + sensor, temperature);
+		data.put("humidity:" + sensor, humidity);
+		data.put("dewpoint:" + sensor, dewpoint);
 	}
 
 	/**
@@ -576,7 +576,7 @@ public class WxLogger implements WMRConstants {
 	 * @param frame
 	 *            sensor data
 	 */
-	private static void analyseUV(byte[] frame) {
+	private void analyseUV(byte[] frame) {
 		String batteryDescription = WMRUtils.getBattery(WMRUtils.getInt(frame[0]) / 64); // get battery level description
 		
 		statusUV = setBatteryStatus(CODE_UV, batteryDescription);// set UV sensor battery status
@@ -604,7 +604,7 @@ public class WxLogger implements WMRConstants {
 	 * @throws input
 	 *             -output exception
 	 */
-	private static void checkMinute() throws IOException {
+	private void checkMinute() throws IOException {
 		Calendar now = Calendar.getInstance(); // get current date and time
 		int hour = now.get(Calendar.HOUR_OF_DAY); // get current hour
 		int minute = now.get(Calendar.MINUTE); // get current minute
@@ -629,7 +629,7 @@ public class WxLogger implements WMRConstants {
 	 * 
 	 * @return start position of frame delimiter (-1 if not found)
 	 */
-	private static int getDelimiter(int pos) {
+	private int getDelimiter(int pos) {
 		for (int i = pos; i < stationNext - 2; i++) {
 			if (stationBuffer[i] == FRAME_BYTE && stationBuffer[i + 1] == FRAME_BYTE) {
 				return (i);
@@ -643,7 +643,7 @@ public class WxLogger implements WMRConstants {
 	 * 
 	 * @return current calendar
 	 */
-	private static Calendar getClockTime() {
+	private Calendar getClockTime() {
 		Calendar now = Calendar.getInstance(); // get current date and time
 		clockHour = now.get(Calendar.HOUR_OF_DAY); // get current hour
 		clockMinute = now.get(Calendar.MINUTE); // get current minute
@@ -653,7 +653,7 @@ public class WxLogger implements WMRConstants {
 	/**
 	 * Initialise program variables.
 	 */
-	public static void initialise() {
+	public void initialise() {
 		stopCount = 0; // set no full stops yet
 
 		Calendar now = Calendar.getInstance(); // get current date and time
@@ -712,7 +712,7 @@ public class WxLogger implements WMRConstants {
 	/**
 	 * Initialise measurement and period variables.
 	 */
-	private static void initialiseMeasures() {
+	private void initialiseMeasures() {
 		statusAnemometer = STATUS_OK; // assume anemometer status OK
 		statusBarometer = STATUS_OK; // assume barometer status OK
 		statusRain = STATUS_OK; // assume rain gauge status OK
@@ -741,7 +741,7 @@ public class WxLogger implements WMRConstants {
 	 * @param buffer
 	 *            data buffer to log
 	 */
-	private static void logBuffer(String prefix, int bytes, byte[] buffer) {
+	private void logBuffer(String prefix, int bytes, byte[] buffer) {
 		String response = ""; // initialise response message
 		for (int i = 0; i < bytes; i++) {
 			// go through buffer bytes
@@ -756,7 +756,7 @@ public class WxLogger implements WMRConstants {
 	 * @param message
 	 *            error message
 	 */
-	private static void logError(String message) {
+	private void logError(String message) {
 		logMessage(true, message); // log error
 	}
 
@@ -769,7 +769,7 @@ public class WxLogger implements WMRConstants {
 	 * @throws input
 	 *             -output exception
 	 */
-	private static void logHour(int newHour) throws IOException {
+	private void logHour(int newHour) throws IOException {
 		logMeasures(); // log measures to file
 		clockMinute = 0; // set clock minute
 		clockHour = newHour; // set clock hour
@@ -786,7 +786,7 @@ public class WxLogger implements WMRConstants {
 	 * @param message
 	 *            information message
 	 */
-	private static void logInfo(String message) {
+	private void logInfo(String message) {
 		logMessage(false, message); // log information
 	}
 
@@ -797,7 +797,7 @@ public class WxLogger implements WMRConstants {
 	 * @throws input
 	 *             -output exception
 	 */
-	private static void logMeasures() throws IOException {
+	private void logMeasures() throws IOException {
 		File logFile = new File(String.format("%04d%02d%02d.DAT", clockYear, clockMonth, clockDay)); // set log file
 		BufferedWriter logWriter = // open log file for appending
 		new BufferedWriter(new FileWriter(logFile, true));
@@ -840,7 +840,7 @@ public class WxLogger implements WMRConstants {
 	 * @param message
 	 *            error message
 	 */
-	private static void logMessage(boolean error, String message) {
+	private void logMessage(boolean error, String message) {
 		if (error) {// error message?
 			logger.error(message);
 		} else {
@@ -852,7 +852,7 @@ public class WxLogger implements WMRConstants {
 	/**
 	 * Report measurements to log if required.
 	 */
-	private static void reportMeasures() {
+	private void reportMeasures() {
 		if ((logFlags & LOG_HOUR) != 0) { // hourly data to be output?
 			String report = // start report with HH:MM
 			String.format("%02d:%02d ", clockHour, clockMinute);
@@ -922,7 +922,7 @@ public class WxLogger implements WMRConstants {
 	 *            battery description
 	 * @return battery status symbol
 	 */
-	private static char setBatteryStatus(byte sensorCode, String batteryDescription) {
+	private char setBatteryStatus(byte sensorCode, String batteryDescription) {
 		char batterySymbol = // get battery status symbol
 		batteryDescription.equals("OK") ? STATUS_OK : STATUS_BATTERY;
 		if (batterySymbol == STATUS_BATTERY) { // battery low?
@@ -949,7 +949,7 @@ public class WxLogger implements WMRConstants {
 	 * @param measurementIndex
 	 *            measurement index
 	 */
-	private static void setMissingStatus(int measurementIndex) {
+	private void setMissingStatus(int measurementIndex) {
 		if (measurementIndex == INDEX_WIND_DIRECTION ||  measurementIndex == INDEX_WIND_SPEED) {// anemometer?
 			statusAnemometer = STATUS_MISSING; // set anemometer status
 		}
@@ -973,7 +973,7 @@ public class WxLogger implements WMRConstants {
 	 * 
 	 * @return current calendar
 	 */
-	private static Calendar setDate() {
+	private Calendar setDate() {
 		Calendar now = Calendar.getInstance(); // get current date and time
 		clockHour = now.get(Calendar.HOUR_OF_DAY); // get current hour
 		clockMinute = now.get(Calendar.MINUTE); // get current minute
@@ -990,7 +990,7 @@ public class WxLogger implements WMRConstants {
 	 * @throws input
 	 *             -output exception
 	 */
-	public static void stationRead() throws IOException {
+	public void stationRead() throws IOException {
 		active = true;
 		logger.debug("Entering STATION READ loop...");
 		while (active) { // loop indefinitely
@@ -1007,7 +1007,7 @@ public class WxLogger implements WMRConstants {
 		logger.debug("Exited STATION READ loop.");
 	}
 	
-	public static void stopRead() {
+	public void stopRead() {
 		active = false;
 	}
 	
@@ -1017,7 +1017,7 @@ public class WxLogger implements WMRConstants {
 	 * @throws input
 	 *             -output exception
 	 */
-	private static void stationRequest() throws IOException {
+	private void stationRequest() throws IOException {
 		logger.debug("STATION REQUEST");
 		if (logFlags != 0 && logFlags != LOG_HOUR) {// not just hourly data?
 			logInfo("Requested weather station data");// output newline
@@ -1033,7 +1033,7 @@ public class WxLogger implements WMRConstants {
 	 *            sensor data
 	 * @return true if checksum is valid
 	 */
-	private static boolean validFrame(byte[] frame) {
+	private boolean validFrame(byte[] frame) {
 		int length = frame.length; // get frame length
 		int byteSum = 0; // initialise byte sum
 		boolean valid = false; // overall validity
@@ -1059,8 +1059,8 @@ public class WxLogger implements WMRConstants {
 	 * Associate a HID Device to the logger.
 	 * @param device
 	 */
-	public static void setDevice(HIDDevice device) {
-		WxLogger.hidDevice = device;
+	public void setDevice(HIDDevice device) {
+		hidDevice = device;
 	}
 	
 	/**
@@ -1068,17 +1068,17 @@ public class WxLogger implements WMRConstants {
 	 * @author Jerome
 	 *
 	 */
-	public static interface DataListener {
+	public interface DataListener {
 		void processData(Map<String, Object> data);
 	}
 	
-	protected static List<DataListener> listeners = new ArrayList<DataListener>();
+	protected List<DataListener> listeners = new ArrayList<DataListener>();
 	
 	/**
 	 * Add a listener to the listeners pool. 
 	 * @param l {@link DataListener}
 	 */
-	public static void addDataListener(DataListener l) {
+	public void addDataListener(DataListener l) {
 		listeners.add(l);
 	}
 	
@@ -1086,23 +1086,23 @@ public class WxLogger implements WMRConstants {
 	 * Remove a listener from the listeners pool.
 	 * @param l {@link DataListener}
 	 */
-	public static void removeListener(DataListener l) {
+	public void removeListener(DataListener l) {
 		listeners.remove(l);
 	}
 	
 	/**
 	 * Remove all listeners from the listeners pool at once.
 	 */
-	public static void clearListeners() {
+	public void clearListeners() {
 		listeners.clear();
 	}
 	
 	/**
 	 * Push data towards registered listeners.
 	 */
-	protected static void pushData() {
+	protected void pushData() {
 		for (DataListener l : listeners) {
-			l.processData(WxLogger.DATA);
+			l.processData(data);
 		}
 	}
 
