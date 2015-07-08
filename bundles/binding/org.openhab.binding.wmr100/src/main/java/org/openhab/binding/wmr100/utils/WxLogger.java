@@ -276,23 +276,23 @@ public class WxLogger implements WMRConstants {
 	 *            sensor data
 	 */
 	private static void analyseAnemometer(byte[] frame) {
-		String batteryDescription = getBattery(getInt(frame[0]) / 64); // get battery level description
+		String batteryDescription = WMRUtils.getBattery(WMRUtils.getInt(frame[0]) / 64); // get battery level description
 		
 		statusAnemometer = setBatteryStatus(CODE_ANEMOMETER, batteryDescription); // set anemometer battery status
 		
-		float windGust = (256.0f * (getInt(frame[5]) % 16) + getInt(frame[4])) / 10.0f;// get wind speed gust (m/s)
+		float windGust = (256.0f * (WMRUtils.getInt(frame[5]) % 16) + WMRUtils.getInt(frame[4])) / 10.0f;// get wind speed gust (m/s)
 		
-		float windAverage = (16.0f * getInt(frame[6]) + getInt(frame[5]) / 16) / 10.0f;// get wind speed average (m/s)
+		float windAverage = (16.0f * WMRUtils.getInt(frame[6]) + WMRUtils.getInt(frame[5]) / 16) / 10.0f;// get wind speed average (m/s)
 		
 		int windDirection = frame[2] % 16; // get wind direction (16ths)
-		String directionDescription = getDirection(windDirection);// get wind direction descr.
+		String directionDescription = WMRUtils.getDirection(windDirection);// get wind direction descr.
 		
 		windDirection = Math.round((frame[2] % 16) * 22.5f);// get wind direction (deg)
 		
-		int chillSign = getInt(frame[8]) / 16; // get wind chill sign quartet
+		int chillSign = WMRUtils.getInt(frame[8]) / 16; // get wind chill sign quartet
 		boolean chillValid = (chillSign & 0x2) == 0;// get wind chill validity
-		chillSign = getSign(chillSign / 8); // get wind chill sign
-		float windChill = chillSign * getInt(frame[7]); // get wind chill (deg C)
+		chillSign = WMRUtils.getSign(chillSign / 8); // get wind chill sign
+		float windChill = chillSign * WMRUtils.getInt(frame[7]); // get wind chill (deg C)
 				
 		String chillDescription = chillValid ? Float.toString(windChill) + DEGREE : "N/A";// set wind chill description
 		
@@ -334,10 +334,10 @@ public class WxLogger implements WMRConstants {
 	 *            sensor data
 	 */
 	private static void analyseBarometer(byte[] frame) {
-		int pressureAbsolute = 256 * (getInt(frame[3]) % 16) + getInt(frame[2]);// get absolute pressure (mb)
-		int pressureRelative = 256 * (getInt(frame[5]) % 16) + getInt(frame[4]);// get relative pressure (mb)
-		String weatherForecast = getWeather(getInt(frame[3]) / 16);// get forecast weather descrip.
-		String weatherPrevious = getWeather(getInt(frame[5]) / 16);// get previous weather descrip.
+		int pressureAbsolute = 256 * (WMRUtils.getInt(frame[3]) % 16) + WMRUtils.getInt(frame[2]);// get absolute pressure (mb)
+		int pressureRelative = 256 * (WMRUtils.getInt(frame[5]) % 16) + WMRUtils.getInt(frame[4]);// get relative pressure (mb)
+		String weatherForecast = WMRUtils.getWeather(WMRUtils.getInt(frame[3]) / 16);// get forecast weather descrip.
+		String weatherPrevious = WMRUtils.getWeather(WMRUtils.getInt(frame[5]) / 16);// get previous weather descrip.
 		
 		if ((logFlags & LOG_SENSOR) != 0) {// sensor data to be output?
 			logInfo(String.format("Barometer: Pressure (Abs.) %s mb, Pressure (Rel.) %s mb, Forecast %s, Previous %s.", 
@@ -363,19 +363,18 @@ public class WxLogger implements WMRConstants {
 	 *             -output exception
 	 */
 	private static void analyseClock(byte[] frame) throws IOException {
-		int minute = getInt(frame[4]) % 60; // get minute, limited to 59
-		int hour = getInt(frame[5]) % 24; // get hour, limited to 23
-		int day = getInt(frame[6]) % 32; // get day, limited to 31
-		int month = getInt(frame[7]) % 13; // get month, limited to 12
-		int year = CENTURY + (getInt(frame[8]) % 100); // get year, limited to
+		int minute = WMRUtils.getInt(frame[4]) % 60; // get minute, limited to 59
+		int hour = WMRUtils.getInt(frame[5]) % 24; // get hour, limited to 23
+		int day = WMRUtils.getInt(frame[6]) % 32; // get day, limited to 31
+		int month = WMRUtils.getInt(frame[7]) % 13; // get month, limited to 12
+		int year = CENTURY + (WMRUtils.getInt(frame[8]) % 100); // get year, limited to
 														// 99
-		int zoneSign = // get time zone sign
-		getSign(getInt(frame[9]) / 128);
-		int zone = getInt(frame[9]) % 128; // get time zone
-		int radioLevel = (getInt(frame[0]) / 16) % 4; // get radio level
-		String radioDescription = getRadio(radioLevel); // get radio description
-		String time = getTime(hour, minute); // get current time
-		String date = getDate(year, month, day); // get current date
+		int zoneSign = WMRUtils.getSign(WMRUtils.getInt(frame[9]) / 128);// get time zone sign
+		int zone = WMRUtils.getInt(frame[9]) % 128; // get time zone
+		int radioLevel = (WMRUtils.getInt(frame[0]) / 16) % 4; // get radio level
+		String radioDescription = WMRUtils.getRadio(radioLevel); // get radio description
+		String time = WMRUtils.getTime(hour, minute); // get current time
+		String date = WMRUtils.getDate(year, month, day); // get current date
 		if ((logFlags & LOG_SENSOR) != 0) {// sensor data to be output?
 			logInfo(String.format("Clock: Time %s, Date %s, UTC %sh, Radio %s (%s).", 
 					time, date, String.format("%+2d", zoneSign*zone), radioLevel, radioDescription));
@@ -395,7 +394,7 @@ public class WxLogger implements WMRConstants {
 			logBuffer("Frame", frame.length, frame); // output frame buffer
 		if (validFrame(frame)) { // frame checksum valid?
 			logInfo("!!Valid frame!!");
-			long actualTime = currentTime(); // get current time in msec
+			long actualTime = WMRUtils.currentTime(); // get current time in msec
 			byte sensorCode = frame[1]; // get sensor code
 			switch (sensorCode) { // check sensor code
 			case CODE_ANEMOMETER: // anemometer?
@@ -441,17 +440,17 @@ public class WxLogger implements WMRConstants {
 	 *            sensor data
 	 */
 	private static void analyseRainfall(byte[] frame) {
-		String batteryDescription = getBattery(getInt(frame[0]) / 64);// get battery level description
+		String batteryDescription = WMRUtils.getBattery(WMRUtils.getInt(frame[0]) / 64);// get battery level description
 		
 		statusRain = setBatteryStatus(CODE_RAINFALL, batteryDescription); // set rain gauge battery status
 		
-		float rainRate = getRain(256.0f * getInt(frame[3]) + getInt(frame[2]));// get rainfall rate (mm/hr)
+		float rainRate = WMRUtils.getRain(256.0f * WMRUtils.getInt(frame[3]) + WMRUtils.getInt(frame[2]));// get rainfall rate (mm/hr)
 		
-		float rainRecent = getRain(256.0f * getInt(frame[5]) + getInt(frame[4])); // get recent (mm)
+		float rainRecent = WMRUtils.getRain(256.0f * WMRUtils.getInt(frame[5]) + WMRUtils.getInt(frame[4])); // get recent (mm)
 		
-		float rainDay = getRain(256.0f * getInt(frame[7]) + getInt(frame[6]));// get rainfall for day (mm)
+		float rainDay = WMRUtils.getRain(256.0f * WMRUtils.getInt(frame[7]) + WMRUtils.getInt(frame[6]));// get rainfall for day (mm)
 		
-		float rainReset = getRain(256.0f * getInt(frame[9]) + getInt(frame[8])); // get rainfall since reset (mm)
+		float rainReset = WMRUtils.getRain(256.0f * WMRUtils.getInt(frame[9]) + WMRUtils.getInt(frame[8])); // get rainfall since reset (mm)
 		
 		if (rainInitial == DUMMY_VALUE) {// initial rain offset unknown?
 			rainInitial = rainReset; // use rain since last reset
@@ -460,14 +459,14 @@ public class WxLogger implements WMRConstants {
 		}
 		float rainMidnight = Math.round(10.0f * (rainReset - rainInitial)) / 10.0f;// set rain total since midnight to 1 dec.
 																// place
-		int minute = getInt(frame[10]) % 60; // get minute, limited to 59
-		int hour = getInt(frame[11]) % 24; // get hour, limited to 23
-		int day = getInt(frame[12]) % 32; // get day, limited to 31
-		int month = getInt(frame[13]) % 13; // get month, limited to 12
-		int year = CENTURY + (getInt(frame[14]) % 100); // get year, limited to
+		int minute = WMRUtils.getInt(frame[10]) % 60; // get minute, limited to 59
+		int hour = WMRUtils.getInt(frame[11]) % 24; // get hour, limited to 23
+		int day = WMRUtils.getInt(frame[12]) % 32; // get day, limited to 31
+		int month = WMRUtils.getInt(frame[13]) % 13; // get month, limited to 12
+		int year = CENTURY + (WMRUtils.getInt(frame[14]) % 100); // get year, limited to
 														// 99
-		String resetTime = getTime(hour, minute); // get last reset time
-		String resetDate = getDate(year, month, day); // get last reset date
+		String resetTime = WMRUtils.getTime(hour, minute); // get last reset time
+		String resetDate = WMRUtils.getDate(year, month, day); // get last reset date
 		if ((logFlags & LOG_SENSOR) != 0) {// sensor data to be output?
 			logInfo(String.format("Rain Gauge: Rate %s mm/h, Recent %s mm, 24 Hour %s mm, From Midnight %s mm, From Reset %s mm, Reset %s %s, Battery %s", 
 					rainRate, rainRecent, rainDay, rainMidnight, rainReset, resetTime, resetDate, batteryDescription));
@@ -537,18 +536,17 @@ public class WxLogger implements WMRConstants {
 	 *            sensor data
 	 */
 	private static void analyseThermohygrometer(byte[] frame) {
-		String batteryDescription = // get battery level description
-		getBattery(getInt(frame[0]) / 64);
-		int sensor = getInt(frame[2]) % 16; // get sensor number
-		int temperatureSign = getSign(getInt(frame[4]) / 16);// get temperature sign
-		float temperature = temperatureSign * (256.0f * (getInt(frame[4]) % 16) + getInt(frame[3])) / 10.0f;// get temperature (deg C)
-		String temperatureTrend = getTrend((getInt(frame[0]) / 16) % 4);// get temperature trend
-		int humidity = getInt(frame[5]) % 100; // get humidity (%)
-		String humidityTrend = getTrend((getInt(frame[2]) / 16) % 4);// get humidity trend
-		int dewpointSign = getSign(getInt(frame[7]) / 16);// get dewpoint sign
-		float dewpoint = dewpointSign * (256.0f * (getInt(frame[7]) % 16) + getInt(frame[6])) / 10.0f;// get dewpoint (deg C)
-		boolean heatValid = (getInt(frame[9]) & 0x20) == 0;// get heat index validity
-		float heatIndex = dewpointSign * fahrenheitCelsius((256.0f * (getInt(frame[9]) % 8) + getInt(frame[8])) / 10.0f);// get heat index (deg C)
+		String batteryDescription = WMRUtils.getBattery(WMRUtils.getInt(frame[0]) / 64);// get battery level description
+		int sensor = WMRUtils.getInt(frame[2]) % 16; // get sensor number
+		int temperatureSign = WMRUtils.getSign(WMRUtils.getInt(frame[4]) / 16);// get temperature sign
+		float temperature = temperatureSign * (256.0f * (WMRUtils.getInt(frame[4]) % 16) + WMRUtils.getInt(frame[3])) / 10.0f;// get temperature (deg C)
+		String temperatureTrend = WMRUtils.getTrend((WMRUtils.getInt(frame[0]) / 16) % 4);// get temperature trend
+		int humidity = WMRUtils.getInt(frame[5]) % 100; // get humidity (%)
+		String humidityTrend = WMRUtils.getTrend((WMRUtils.getInt(frame[2]) / 16) % 4);// get humidity trend
+		int dewpointSign = WMRUtils.getSign(WMRUtils.getInt(frame[7]) / 16);// get dewpoint sign
+		float dewpoint = dewpointSign * (256.0f * (WMRUtils.getInt(frame[7]) % 16) + WMRUtils.getInt(frame[6])) / 10.0f;// get dewpoint (deg C)
+		boolean heatValid = (WMRUtils.getInt(frame[9]) & 0x20) == 0;// get heat index validity
+		float heatIndex = dewpointSign * WMRUtils.fahrenheitCelsius((256.0f * (WMRUtils.getInt(frame[9]) % 8) + WMRUtils.getInt(frame[8])) / 10.0f);// get heat index (deg C)
 		String heatDescription = heatValid ? heatIndex + DEGREE + "C" : "N/A";// get heat index description
 		
 		if ((logFlags & LOG_SENSOR) != 0) { // sensor data to be output?
@@ -579,12 +577,12 @@ public class WxLogger implements WMRConstants {
 	 *            sensor data
 	 */
 	private static void analyseUV(byte[] frame) {
-		String batteryDescription = getBattery(getInt(frame[0]) / 64); // get battery level description
+		String batteryDescription = WMRUtils.getBattery(WMRUtils.getInt(frame[0]) / 64); // get battery level description
 		
 		statusUV = setBatteryStatus(CODE_UV, batteryDescription);// set UV sensor battery status
 		
-		int uvIndex = getInt(frame[3]) & 0xF; // get UV index
-		String uvDescription = getUV(uvIndex); // get UV index description
+		int uvIndex = WMRUtils.getInt(frame[3]) & 0xF; // get UV index
+		String uvDescription = WMRUtils.getUV(uvIndex); // get UV index description
 		if ((logFlags & LOG_SENSOR) != 0) {// sensor data to be output?
 			logInfo(String.format("UV: Index %s (%s), Battery %s", uvIndex, uvDescription, batteryDescription));
 		}
@@ -627,15 +625,6 @@ public class WxLogger implements WMRConstants {
 	}
 
 	/**
-	 * Return current time in msec
-	 * 
-	 * @return current time in msec
-	 */
-	private static long currentTime() {
-		return (System.nanoTime() / 1000000); // return current time in msec
-	}
-
-	/**
 	 * Return start position of frame delimiter (i.e. two byes of 0xFF).
 	 * 
 	 * @return start position of frame delimiter (-1 if not found)
@@ -650,29 +639,6 @@ public class WxLogger implements WMRConstants {
 	}
 
 	/**
-	 * Return Celsius equivalent of Fahrenheit temperature.
-	 * 
-	 * @param fahrenheit
-	 *            Fahrenheit temperature
-	 * @return Celsius temperature
-	 */
-	private static float fahrenheitCelsius(float fahrenheit) {
-		return (0.5555f * (fahrenheit - 32.0f)); // return Celsius equivalent
-	}
-
-	/**
-	 * Return description corresponding to battery code.
-	 * 
-	 * @param batteryCode
-	 *            battery code
-	 * @return battery description
-	 */
-	private static String getBattery(int batteryCode) {
-		int batteryIndex = batteryCode == 0 ? 0 : 1;// get battery description index
-		return (BATTERY_DESCRIPTION[batteryIndex]); // return battery description
-	}
-
-	/**
 	 * Extract current hour and minute into global clock variables.
 	 * 
 	 * @return current calendar
@@ -682,126 +648,6 @@ public class WxLogger implements WMRConstants {
 		clockHour = now.get(Calendar.HOUR_OF_DAY); // get current hour
 		clockMinute = now.get(Calendar.MINUTE); // get current minute
 		return (now); // return current calendar
-	}
-
-	/**
-	 * Return formatted date.
-	 * 
-	 * @param year
-	 *            year
-	 * @param month
-	 *            month
-	 * @param day
-	 *            day
-	 * @return DD/MM/YYYY
-	 */
-	private static String getDate(int year, int month, int day) {
-		return (String.format("%02d/%02d/%04d", day, month, year));  // return DD/MM/YYYY
-	}
-
-	/**
-	 * Return description corresponding to wind direction code.
-	 * 
-	 * @param directionCode
-	 *            wind direction code
-	 * @return wind direction description
-	 */
-	private static String getDirection(int directionCode) {
-		return (directionCode < DIRECTION_DESCRIPTION.length ? DIRECTION_DESCRIPTION[directionCode] : "Unknown");// return wind direction descr. // weather dir. in range?
-	}
-
-	/**
-	 * Return integer value of byte.
-	 * 
-	 * @param value
-	 *            byte value
-	 * @return integer value
-	 */
-	private static int getInt(byte value) {
-		return ((int) value & 0xFF); // return bottom 8 bits
-	}
-
-	/**
-	 * Return description corresponding to radio code.
-	 * 
-	 * @param radioCode
-	 *            radio code
-	 * @return radio description
-	 */
-	private static String getRadio(int radioCode) {
-		return (radioCode < RADIO_DESCRIPTION.length ? RADIO_DESCRIPTION[radioCode] : "Strong");// return radio description // radio code in range?
-	}
-
-	/**
-	 * Return rainfall in inches.
-	 * 
-	 * @param rain
-	 *            rainfall in 100ths of inches
-	 * @return rainfall in mm
-	 */
-	private static float getRain(float rain) {
-		rain = rain / 100.0f * 25.39f; // get rainfall in mm
-		rain = Math.round(rain * 10.0f) / 10.0f; // round to one decimal place
-		return (rain); // return rainfall in mm
-	}
-
-	/**
-	 * Return sign value corresponding to sign code (0 positive, non-0
-	 * negative).
-	 * 
-	 * @param signCode
-	 *            sign code
-	 * @return sign (+1 or -1)
-	 */
-	private static int getSign(int signCode) {
-		return (signCode == 0 ? +1 : -1); // return sign code
-	}
-
-	/**
-	 * Return formatted time.
-	 * 
-	 * @param hour
-	 *            hour
-	 * @param minute
-	 *            minute
-	 * @return HH:MM
-	 */
-	private static String getTime(int hour, int minute) {
-		return (String.format("%02d:%02d", hour, minute)); // return HH:MM
-	}
-
-	/**
-	 * Return description corresponding to trend code.
-	 * 
-	 * @param trendCode
-	 *            trend code
-	 * @return trend description
-	 */
-	private static String getTrend(int trendCode) {
-		return (trendCode < TREND_DESCRIPTION.length ? TREND_DESCRIPTION[trendCode] : "Unknown"); // return trend description// trend code in range?
-	}
-
-	/**
-	 * Return description corresponding to UV code.
-	 * 
-	 * @param uvCode
-	 *            uvCode code
-	 * @return uvCode description
-	 */
-	private static String getUV(int uvCode) {
-		int uvIndex = (uvCode >= 11 ? 4 : uvCode >= 8 ? 3 : uvCode >= 6 ? 2 : uvCode >= 3 ? 1 : 0);
-		return (UV_DESCRIPTION[uvIndex]); // get UV description index // return UV description
-	}
-
-	/**
-	 * Return description corresponding to weather code.
-	 * 
-	 * @param weatherCode
-	 *            weather code
-	 * @return weather description
-	 */
-	private static String getWeather(int weatherCode) {
-		return (weatherCode < WEATHER_DESCRIPTION.length ? WEATHER_DESCRIPTION[weatherCode]	: "Unknown"); // return weather description // weather code in range?
 	}
 
 	/**
@@ -1149,7 +995,7 @@ public class WxLogger implements WMRConstants {
 		logger.debug("Entering STATION READ loop...");
 		while (active) { // loop indefinitely
 			logger.debug("STATION READ");
-			long actualTime = currentTime(); // get current time in msec
+			long actualTime = WMRUtils.currentTime(); // get current time in msec
 			if (actualTime - lastTime > STATION_TIMEOUT * 1000) {// data request timeout passed?
 				logger.debug("Performing station request");
 				stationRequest(); // request data from station
@@ -1193,9 +1039,9 @@ public class WxLogger implements WMRConstants {
 		boolean valid = false; // overall validity
 		if (length >= 2) { // at least a two-byte frame?
 			for (int i = 0; i < length - 2; i++) {// go through non-checksum bytes
-				byteSum += getInt(frame[i]); // add byte to sum
+				byteSum += WMRUtils.getInt(frame[i]); // add byte to sum
 			}
-			int checkSum = 256 * getInt(frame[length - 1]) + getInt(frame[length - 2]);// get expected sum
+			int checkSum = 256 * WMRUtils.getInt(frame[length - 1]) + WMRUtils.getInt(frame[length - 2]);// get expected sum
 			
 			valid = checkSum == byteSum; // get checksum validity
 			if (valid) { // checksum valid?
