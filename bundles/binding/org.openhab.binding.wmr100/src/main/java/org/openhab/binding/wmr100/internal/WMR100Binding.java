@@ -8,6 +8,7 @@
  */
 package org.openhab.binding.wmr100.internal;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Dictionary;
 import java.util.Map;
@@ -20,6 +21,7 @@ import org.openhab.core.binding.AbstractActiveBinding;
 import org.openhab.core.library.types.DecimalType;
 import org.openhab.core.types.Command;
 import org.openhab.core.types.State;
+import org.osgi.framework.BundleContext;
 import org.osgi.service.cm.ConfigurationException;
 import org.osgi.service.cm.ManagedService;
 import org.slf4j.Logger;
@@ -36,12 +38,9 @@ import com.codeminders.hidapi.HIDManager;
  * @author JeromeCourat
  * @since 1.8.0
  */
-public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> implements ManagedService, WxLogger.DataListener {
+public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> implements ManagedService {
 
 	private static final Logger logger = LoggerFactory.getLogger(WMR100Binding.class);
-	
-	private boolean running = false;
-
 	
 	/** 
 	 * the refresh interval which is used to poll values from the WMR100
@@ -58,6 +57,10 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 	private int retryDelay = DEFAULT_RETRY_DELAY;
 	
 	private int retryCount = DEFAULT_RETRY_COUNT;
+	
+	private boolean logEnabled;
+	
+	private File logDirectory;
 	
 	/** Weather station USB default vendor identifier */
 	private static final int DEFAULT_STATION_VENDOR = 0x0FDE;
@@ -78,9 +81,23 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 	public WMR100Binding() {
 		wxLogger = new WxLogger();
 	}
-		
 	
+	/**
+     * Called by the SCR to activate the component with its configuration read from CAS
+     * 
+     * @param bundleContext BundleContext of the Bundle that defines this component
+     * @param configuration Configuration properties for this component obtained from the ConfigAdmin service
+     */
+    public void activate(final BundleContext bundleContext, final Map<String, Object> configuration) {
+    	activate();
+    }
+		
 	public void activate() {
+		bindHid();
+	}
+	
+	public void bindHid() {
+		logger.debug("Binding to HID device...");
 		HIDManager hidManager = null;
 		try {
 			hidManager = HIDManager.getInstance();
@@ -88,9 +105,9 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 			logger.error("Could not get HIDManager instance", e);
 			return;
 		}
-		while (hidDevice == null) {
+		while (hidDevice == null && retryCounter < retryCount) {
 			try {
-				hidDevice = hidManager.openById(DEFAULT_STATION_VENDOR, DEFAULT_STATION_PRODUCT, null);
+				hidDevice = hidManager.openById(vendorId, productId, null);
 				if (hidDevice != null) {
 					logger.info("HID Device found:" + hidDevice.getManufacturerString());
 					wxLogger.setDevice(hidDevice);
@@ -112,13 +129,62 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 			}
 			retryCounter++;
 		}
-		
+		if (hidDevice == null && retryCounter >= retryCount) {
+			logger.error("Could not open HID Device.");
+		}
 	}
 	
 	public void deactivate() {
-		wxLogger.stopRead();
-		// deallocate resources here that are no longer needed and 
-		// should be reset when activating this binding again
+		unbindHid();
+	}
+	
+	/**
+     * Called by the SCR to deactivate the component when either the configuration is removed or
+     * mandatory references are no longer satisfied or the component has simply been stopped.
+     * @param reason Reason code for the deactivation:<br>
+     * <ul>
+     * <li> 0 – Unspecified
+     * <li> 1 – The component was disabled
+     * <li> 2 – A reference became unsatisfied
+     * <li> 3 – A configuration was changed
+     * <li> 4 – A configuration was deleted
+     * <li> 5 – The component was disposed
+     * <li> 6 – The bundle was stopped
+     * </ul>
+     */
+    public void deactivate(final int reason) {
+//        this.bundleContext = null;
+        // deallocate resources here that are no longer needed and 
+        // should be reset when activating this binding again
+    	String strReason = "unknown";
+    	switch(reason) {
+    	case 0: 
+    		strReason = "unspecified";
+    		break;
+    	case 1: 
+    		strReason = "The component was disabled";
+    		break;
+    	case 2: 
+    		strReason = "A reference became unsatisfied";
+    		break;
+    	case 3:
+    		strReason = "A configuration was changed";
+    		break;
+    	case 4:
+    		strReason = "A configuration was deleted";
+    		break;
+    	case 5:
+    		strReason = "The component was disposed";
+    		break;
+    	case 6:
+    		strReason = "The bundle was stopped";
+    		break;
+    	}
+    	logger.info("Deactivate with reason: " + strReason);
+    	deactivate();
+    }
+	
+	public void unbindHid() {
 		if (hidDevice != null) {
 			try {
 				hidDevice.close();
@@ -129,7 +195,6 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 			wxLogger.setDevice(null);
 		}
 	}
-
 	
 	/**
 	 * @{inheritDoc}
@@ -152,20 +217,17 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 	 */
 	@Override
 	protected void execute() {
-		if (running) return;
 		logger.debug("WMR100Binding#execute()");
 		try {
 			if (hidDevice == null) {
 				logger.warn("HID Device not yet open.");
 				return;
 			}
-			running = true;
-			wxLogger.addDataListener(this);
-			wxLogger.initialise();
-			wxLogger.stationRead();
+			wxLogger.singleStationRead();
+			processData(wxLogger.getData());
+			wxLogger.clearData();
 		} catch (IOException e) {
 			logger.warn("WxLogger could not properly read data.", e);
-			running = false;
 		}
 	}
 	
@@ -257,9 +319,12 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 	/**
 	 * @{inheritDoc}
 	 */
-	public void updated(Dictionary<String, ?> config) throws ConfigurationException {
+	@SuppressWarnings("rawtypes")
+	public void updated(Dictionary config) throws ConfigurationException {
+		setProperlyConfigured(false);
+		logger.debug("updated!!");
 		if (config != null) {
-			
+			logger.debug("updated with non-null config!");
 			// to override the default refresh interval one has to add a 
 			// parameter to openhab.cfg like <bindingName>:refresh=<intervalInMs>
 			String refreshIntervalString = (String) config.get("refresh");
@@ -288,11 +353,55 @@ public class WMR100Binding extends AbstractActiveBinding<WMR100BindingProvider> 
 				}
 			}
 			
+			String strRetryDelay = (String) config.get("retryDelay");
+			if (StringUtils.isNotBlank(strRetryDelay)) {
+				try {
+					retryDelay = Integer.parseInt(strRetryDelay);
+				} catch(Exception e) {
+					logger.error("Invalid parameter value for {}: {}", "retrydelay", strRetryDelay);
+					return;
+				}
+			}
 			
-			// read further config parameters here ...
-			setProperlyConfigured(true);
+			String strRetryCount = (String) config.get("retrycount");
+			if (StringUtils.isNotBlank(strRetryDelay)) {
+				try {
+					retryCount = Integer.parseInt(strRetryCount);
+				} catch(Exception e) {
+					logger.error("Invalid parameter value for {}: {}", "retrycount", strRetryCount);
+					return;
+				}
+			}
+			
+			String strEnableLog = (String) config.get("enableLog");
+			if (StringUtils.isNotBlank(strEnableLog)) {
+				logEnabled = Boolean.parseBoolean(strEnableLog);
+				wxLogger.setLogEnabled(logEnabled);
+			}
+			
+			String strLogDir = (String) config.get("logDirectory");
+			if (StringUtils.isNotBlank(strLogDir)) {
+				File logDir = new File(strLogDir);
+				if (logDir.exists() && logDir.isDirectory()) {
+					logDirectory = logDir;
+					wxLogger.setLogDirectory(logDirectory);
+				} else {
+					logger.warn("Log directory '{}' seems not to be a valid directory. Does it exist?");
+					logEnabled = false;
+				}
+			}
+			
+			if (vendorId != 0 && productId != 0 && refreshInterval != -1) {
+				logger.debug("Configuration is complete. Ready to start.");
+				if (hidDevice == null) {
+					bindHid();
+					wxLogger.initialize();
+				}
+				setProperlyConfigured(true);
+			} else {
+				logger.debug("Configuration not complete yet. Won't start.");
+			}
 		}
 	}
 	
-
 }

@@ -30,6 +30,7 @@ public class WMR100GenericBindingProvider extends AbstractGenericBindingProvider
 	/**
 	 * {@inheritDoc}
 	 */
+	@Override
 	public String getBindingType() {
 		return "wmr100";
 	}
@@ -37,6 +38,7 @@ public class WMR100GenericBindingProvider extends AbstractGenericBindingProvider
 	/**
 	 * @{inheritDoc}
 	 */
+	@Override
 	public void validateItemType(Item item, String bindingConfig) throws BindingConfigParseException {
 		//if (!(item instanceof SwitchItem || item instanceof DimmerItem)) {
 		//	throw new BindingConfigParseException("item '" + item.getName()
@@ -44,17 +46,17 @@ public class WMR100GenericBindingProvider extends AbstractGenericBindingProvider
 		//			+ "', only Switch- and DimmerItems are allowed - please check your *.items configuration");
 		//}
 	}
-	
+	@Override
 	public int getId(String itemName) {
 		WMR100BindingConfig config = (WMR100BindingConfig) bindingConfigs.get(itemName);
 		return config != null ? config.sensorId : 0;
 	}
-	
+	@Override
 	public String getDataName(String itemName) {
 		WMR100BindingConfig config = (WMR100BindingConfig) bindingConfigs.get(itemName);
 		return config !=  null ? config.dataName : null;
 	}
-	
+	@Override
 	public String getConfigString(String itemName) {
 		return getDataName(itemName) +  ":" + getId(itemName);
 	}

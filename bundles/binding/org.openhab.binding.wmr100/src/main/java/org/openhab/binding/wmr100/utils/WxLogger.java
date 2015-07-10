@@ -12,11 +12,9 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -41,16 +39,20 @@ import com.codeminders.hidapi.HIDDevice;
  */
 public class WxLogger implements WMRConstants {
 	
+	/** Used as activity indicator for loop read method */
 	private boolean active;
 	
+	/** Internal logger */
 	private final Logger logger = LoggerFactory.getLogger(WxLogger.class);
 	
+	/** Gathered data, built after frames analysis. */
 	public Map<String,Object> data = new HashMap<String, Object>();
-
 	
-
-	// ------------------------ customisation constants
-	// --------------------------
+	/** Class-wide log enabled indicator. */
+	private boolean logEnabled;
+	
+	/** Directory output for .DAT files */
+	private File logDirectory;
 
 	/** Degree character */
 	private final String DEGREE = "\u00B0"; // with Unicode console
@@ -115,9 +117,6 @@ public class WxLogger implements WMRConstants {
 			(byte) 0x20, (byte) 0x00, (byte) 0x08, (byte) 0x01, (byte) 0x00,
 			(byte) 0x00, (byte) 0x00, (byte) 0x00 };
 
-	/** Weather station USB product identifier */
-	private final int STATION_PRODUCT = 0xCA01;
-
 	/** Weather station data request command */
 	private final byte[] STATION_REQUEST = { (byte) 0x00, (byte) 0x01,
 			(byte) 0xD0, (byte) 0x08, (byte) 0x01, (byte) 0x00, (byte) 0x00,
@@ -133,11 +132,9 @@ public class WxLogger implements WMRConstants {
 	/** Size of buffer for accumulated USB data (bytes) */
 	private final int STATION_SIZE = 100;
 
-	/** Weather station USB vendor identifier */
-	private final int STATION_VENDOR = 0x0FDE;
-
 	/** Logical OR of individual flags */
-	private int logFlags = LOG_FRAME | LOG_HOUR | LOG_SENSOR | LOG_USB;
+//	private int logFlags = LOG_FRAME | LOG_HOUR | LOG_SENSOR | LOG_USB;
+	private int logFlags = LOG_SENSOR;
 
 	/** Number of consecutive full stop characters from console */
 	private int stopCount;
@@ -424,12 +421,10 @@ public class WxLogger implements WMRConstants {
 				logError("Ignoring unknown sensor code 0x"
 						+ String.format("%02X", sensorCode));
 			}
-			// JCO now let's notify listeners, then clear data map.
-			pushData();
-			data.clear();
 		}
-		else // frame checksum invalid
+		else {// frame checksum invalid 
 			logInfo("Invalid frame checksum");
+		}
 	}
 
 	/**
@@ -653,7 +648,7 @@ public class WxLogger implements WMRConstants {
 	/**
 	 * Initialise program variables.
 	 */
-	public void initialise() {
+	public void initialize() {
 		stopCount = 0; // set no full stops yet
 
 		Calendar now = Calendar.getInstance(); // get current date and time
@@ -770,7 +765,9 @@ public class WxLogger implements WMRConstants {
 	 *             -output exception
 	 */
 	private void logHour(int newHour) throws IOException {
-		logMeasures(); // log measures to file
+		if (logEnabled) {
+			logMeasures(); // log measures to file
+		}
 		clockMinute = 0; // set clock minute
 		clockHour = newHour; // set clock hour
 		reportMeasures(); // report measures to log
@@ -798,9 +795,9 @@ public class WxLogger implements WMRConstants {
 	 *             -output exception
 	 */
 	private void logMeasures() throws IOException {
-		File logFile = new File(String.format("%04d%02d%02d.DAT", clockYear, clockMonth, clockDay)); // set log file
-		BufferedWriter logWriter = // open log file for appending
-		new BufferedWriter(new FileWriter(logFile, true));
+		File logFile = logDirectory != null ? new File(logDirectory, String.format("%04d%02d%02d.DAT", clockYear, clockMonth, clockDay))
+											: new File(String.format("%04d%02d%02d.DAT", clockYear, clockMonth, clockDay));
+		BufferedWriter logWriter = new BufferedWriter(new FileWriter(logFile, true));
 		for (int p = periodLow; p < PERIOD_SIZE; p++) { // go through each period
 			String report = String.format("%02d:%02d:00", clockHour, p * LOG_INTERVAL);  // start rep. line with HH:MM:SS
 			
@@ -841,11 +838,14 @@ public class WxLogger implements WMRConstants {
 	 *            error message
 	 */
 	private void logMessage(boolean error, String message) {
+		if (! logEnabled) {
+			return;
+		}
 		if (error) {// error message?
 			logger.error(message);
 		} else {
 			// information message
-			logger.debug(message);
+			logger.info(message);
 		}
 	}
 
@@ -1007,6 +1007,20 @@ public class WxLogger implements WMRConstants {
 		logger.debug("Exited STATION READ loop.");
 	}
 	
+	public void singleStationRead() throws IOException {
+		logger.debug("Entering singleStationRead()");
+		long actualTime = WMRUtils.currentTime(); // get current time in msec
+		if (actualTime - lastTime > STATION_TIMEOUT * 1000) {// data request timeout passed?
+			logger.debug("Performing station request");
+			stationRequest(); // request data from station
+			lastTime = actualTime; // note last data request time
+		}
+		logger.debug("Performing single station read...");
+		responseBytes = hidDevice.readTimeout(responseBuffer, RESPONSE_TIMEOUT * 1000);// read HID data with time limit
+		analyseResponse(responseBytes, responseBuffer); // analyse HID responses
+		logger.debug("Terminated WMR100 response analysis");
+	}
+	
 	public void stopRead() {
 		active = false;
 	}
@@ -1063,47 +1077,27 @@ public class WxLogger implements WMRConstants {
 		hidDevice = device;
 	}
 	
-	/**
-	 * Interface defining a listener for weather data.
-	 * @author Jerome
-	 *
-	 */
-	public interface DataListener {
-		void processData(Map<String, Object> data);
+	public Map<String,Object> getData() {
+		return data;
 	}
 	
-	protected List<DataListener> listeners = new ArrayList<DataListener>();
-	
-	/**
-	 * Add a listener to the listeners pool. 
-	 * @param l {@link DataListener}
-	 */
-	public void addDataListener(DataListener l) {
-		listeners.add(l);
+	public void clearData() {
+		data.clear();
 	}
 	
-	/**
-	 * Remove a listener from the listeners pool.
-	 * @param l {@link DataListener}
-	 */
-	public void removeListener(DataListener l) {
-		listeners.remove(l);
+	public void setLogEnabled(boolean logEnabled) {
+		this.logEnabled = logEnabled;
 	}
 	
-	/**
-	 * Remove all listeners from the listeners pool at once.
-	 */
-	public void clearListeners() {
-		listeners.clear();
+	public boolean isLogEnabled() {
+		return logEnabled;
 	}
 	
-	/**
-	 * Push data towards registered listeners.
-	 */
-	protected void pushData() {
-		for (DataListener l : listeners) {
-			l.processData(data);
-		}
+	public void setLogDirectory(File logDirectory) {
+		this.logDirectory = logDirectory;
 	}
-
+	
+	public File getLogDirectory() {
+		return logDirectory;
+	}
 }
